@@ -1,0 +1,9 @@
+{
+	"id": "org.webosbrew.terminal.service",
+	"description": "Interactive shell service for webOS Terminal",
+	"services": [
+		{
+			"name": "org.webosbrew.terminal.service"
+		}
+	]
+}

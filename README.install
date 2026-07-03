@@ -1,0 +1,163 @@
+# Installing webOS Terminal
+
+Step-by-step guide to get webOS Terminal running on your LG TV.
+
+## Before you begin
+
+You will need:
+
+1. **A rooted LG webOS TV** — see [webosbrew.org/rooting](https://www.webosbrew.org/rooting/) or [cani.rootmy.tv](https://cani.rootmy.tv) for device-specific guides.
+2. **Homebrew Channel** — usually installed automatically when you root. If not, install it from [webosbrew/webos-homebrew-channel](https://github.com/webosbrew/webos-homebrew-channel).
+3. **Network access** — your TV and computer should be on the same local network (for manual install).
+
+> **Note:** This app is aimed at rooted TVs. On a non-rooted TV, shell access is very limited and the terminal may not work as expected.
+
+---
+
+## Option A: Install from Homebrew Channel (easiest)
+
+Once webOS Terminal is published to the Homebrew app store:
+
+1. Open **Homebrew Channel** on your TV.
+2. Find **webOS Terminal** in the app list.
+3. Select it and press **Install**.
+4. When installation finishes, press **Launch**.
+
+That is it. The app and its shell service are installed together.
+
+---
+
+## Option B: Manual install (from a computer)
+
+Use this if the app is not yet in the Homebrew store, or you are testing a build yourself.
+
+### 1. Set up your computer
+
+Install the webOS TV CLI tools:
+
+```bash
+npm install -g @webosose/ares-cli
+```
+
+### 2. Connect your TV
+
+**Rooted TV (recommended):**
+
+1. In Homebrew Channel, enable **SSH**.
+2. On your computer, generate an SSH key if you do not have one: `ssh-keygen`
+3. Copy your public key to the TV: `~/.ssh/authorized_keys` (as user `root`)
+4. Register the device:
+
+```bash
+ares-setup-device -a webos \
+  -i "username=root" \
+  -i "privatekey=/path/to/your/id_rsa" \
+  -i "host=YOUR_TV_IP" \
+  -i "port=22"
+```
+
+**Developer Mode TV (non-root):**
+
+1. Install the Developer Mode app from the LG Content Store.
+2. Enable developer mode and download the TV key from `http://YOUR_TV_IP:9991/webos_rsa`
+3. Register with `ares-setup-device` using username `prisoner`, port `9922`, and the downloaded key.
+
+### 3. Build the app (developers only)
+
+If you are installing from source:
+
+```bash
+git clone <repository-url>
+cd webos-terminal
+npm install
+npm run build
+```
+
+This produces a `dist/` folder with the app and shell service.
+
+### 4. Package and install
+
+```bash
+cd dist
+ares-package .
+ares-install org.webosbrew.terminal_0.1.0_all.ipk
+```
+
+Replace the version number in the filename if yours differs.
+
+### 5. Launch the app
+
+```bash
+ares-launch org.webosbrew.terminal
+```
+
+Or find **webOS Terminal** in your TV’s app launcher.
+
+---
+
+## First launch
+
+1. Open **webOS Terminal**.
+2. You should see a terminal prompt (for example, `$` or `#` on a rooted device).
+3. Type a simple command to confirm it works, such as:
+
+```bash
+uname -a
+ls /
+```
+
+4. Use your remote to focus the terminal. The on-screen keyboard appears when you need to type.
+
+---
+
+## Troubleshooting
+
+### The app opens but shows no shell / an error message
+
+- Confirm your TV is **rooted** and Homebrew Channel is installed.
+- Make sure Homebrew Channel’s root services are running (open Homebrew Channel once after boot).
+- Try reinstalling the app.
+
+### Commands fail with “permission denied”
+
+- The app may be running without root privileges. On rooted TVs, ensure Homebrew Channel elevation is active.
+- Some system paths are protected even on rooted devices.
+
+### I only see a browser-style preview when developing
+
+- That is expected when running `npm run serve` on a computer. Deploy to a real TV to get a live shell.
+
+### SSH / ares-cli cannot connect
+
+- Check the TV IP address has not changed.
+- Confirm SSH is enabled in Homebrew Channel.
+- Verify your SSH key is in `/home/root/.ssh/authorized_keys` on the TV.
+- Try connecting directly: `ssh root@YOUR_TV_IP`
+
+### Reinstalling or updating
+
+```bash
+ares-install org.webosbrew.terminal_0.1.0_all.ipk
+```
+
+Installing again over an existing copy is safe. In Homebrew Channel, you can also press **5** on an app’s detail page to force a reinstall.
+
+---
+
+## Uninstalling
+
+**From Homebrew Channel:** open the app’s page and select **Uninstall**.
+
+**From a computer:**
+
+```bash
+ares-install --remove org.webosbrew.terminal
+```
+
+---
+
+## Need help?
+
+- [webOS Homebrew](https://www.webosbrew.org/)
+- [Homebrew Channel on GitHub](https://github.com/webosbrew/webos-homebrew-channel)
+- Community forums and Discord linked from the Homebrew site

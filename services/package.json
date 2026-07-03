@@ -1,0 +1,8 @@
+{
+	"name": "org.webosbrew.terminal.service",
+	"version": "0.1.0",
+	"main": "shell_service.js",
+	"dependencies": {
+		"webos-service": "^1.2.1"
+	}
+}

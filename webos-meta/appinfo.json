@@ -1,0 +1,19 @@
+{
+	"id": "org.webosbrew.terminal",
+	"version": "0.1.0",
+	"vendor": "webOS Homebrew",
+	"type": "web",
+	"main": "index.html",
+	"title": "webOS Terminal",
+	"icon": "icon.png",
+	"miniicon": "icon-mini.png",
+	"largeIcon": "icon-large.png",
+	"uiRevision": 2,
+	"requiredPermissions": [
+		"network.operation",
+		"network.query",
+		"activities.operation",
+		"services.blegacy",
+		"services.dev"
+	]
+}

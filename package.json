@@ -1,0 +1,48 @@
+{
+	"name": "webos-terminal",
+	"version": "0.1.0",
+	"description": "Native terminal emulator for LG webOS TVs",
+	"author": "webOS Homebrew",
+	"main": "src/index.js",
+	"scripts": {
+		"serve": "enact serve",
+		"pack": "enact pack",
+		"pack-p": "enact pack -p",
+		"watch": "enact pack --watch",
+		"clean": "enact clean",
+		"lint": "enact lint .",
+		"license": "enact license",
+		"test": "enact test",
+		"test-watch": "enact test --watch",
+		"build": "npm run pack-p && npm run build-service",
+		"build-service": "mkdir -p dist/services && cp services/shell_service.js services/services.json services/package.json dist/services/"
+	},
+	"license": "MIT",
+	"private": true,
+	"repository": "https://github.com/webosbrew/webos-terminal",
+	"engines": {
+		"npm": ">=6.9.0"
+	},
+	"enact": {
+		"theme": "limestone",
+		"title": "webOS Terminal"
+	},
+	"browserslist": [
+		"chrome >= 53 and chrome < 80"
+	],
+	"dependencies": {
+		"@enact/core": "^5.5.1",
+		"@enact/i18n": "^5.5.1",
+		"@enact/limestone": "^1.10.1",
+		"@enact/spotlight": "^5.5.1",
+		"@enact/ui": "^5.5.1",
+		"@enact/webos": "^5.5.1",
+		"@xterm/addon-fit": "^0.10.0",
+		"@xterm/xterm": "^5.5.0",
+		"ilib": "npm:ilib-webos@14.21.0-webos1",
+		"prop-types": "^15.8.1",
+		"react": "^19.2.7",
+		"react-dom": "^19.2.7",
+		"web-vitals": "^5.3.0"
+	}
+}
