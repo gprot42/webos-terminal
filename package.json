@@ -19,7 +19,7 @@
 	},
 	"license": "MIT",
 	"private": true,
-	"repository": "https://github.com/webosbrew/webos-terminal",
+	"repository": "https://github.com/gprot42/webos-terminal",
 	"engines": {
 		"npm": ">=6.9.0"
 	},

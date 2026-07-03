@@ -10,13 +10,11 @@ import {
 	bindKeyboardVisibility,
 	detachTerminalTextarea,
 	focusInputElement,
-	getInputLanguage,
 	isKeyboardVisible,
 	isWebOSTV,
 	mapKeyDownToTerminal,
 	pauseSpotlightForKeyboard,
 	resumeSpotlightForKeyboard,
-	shieldVkbArrowKey,
 	syncProxyInputDelta
 } from '../../utils/keyboard';
 import {clampTerminalRows, KEYBOARD_MODES} from '../../utils/settings';
@@ -72,10 +70,6 @@ class TerminalView extends Component {
 
 	setProxyInputRef = (node) => {
 		this.proxyInputRef = node;
-
-		if (node) {
-			node.lang = getInputLanguage()?.split('-')[0] || 'en';
-		}
 	};
 
 	tryInitTerminal () {
@@ -230,9 +224,25 @@ class TerminalView extends Component {
 
 		this.proxyInputLength = length;
 
-		if (delta) {
-			this.sendToTerminal(delta);
+		if (!delta) {
+			return;
 		}
+
+		// The on-screen keyboard's Enter key inserts a newline into the field.
+		// Treat that as a line submit: forward as a carriage return and reset the
+		// field so the next command starts clean.
+		if (/[\r\n]/.test(delta)) {
+			this.sendToTerminal(delta.replace(/\r?\n/g, '\r'));
+
+			if (this.proxyInputRef) {
+				this.proxyInputRef.value = '';
+			}
+
+			this.proxyInputLength = 0;
+			return;
+		}
+
+		this.sendToTerminal(delta);
 	}
 
 	handleProxyInput = () => {
@@ -257,6 +267,11 @@ class TerminalView extends Component {
 	};
 
 	handleKeyboardVisible = () => {
+		// Pause Spotlight for the whole VKB session. Without this, Spotlight moves
+		// focus back onto the terminal region, blurs the proxy input, and the VKB
+		// closes again after ~1s (flicker). Pausing does NOT block the system VKB's
+		// own keys -- the IME owns them.
+		pauseSpotlightForKeyboard();
 		this.startProxyInputPoll();
 	};
 
@@ -271,7 +286,13 @@ class TerminalView extends Component {
 	};
 
 	handleProxyKeyDown = (event) => {
-		if (shieldVkbArrowKey(event)) {
+		// While the system VKB is open, let webOS fully own every key: navigation
+		// (arrows) so the highlight can reach the ENG/umlaut column, OK/select so
+		// those keys activate, and Enter/accents. We must NOT preventDefault or
+		// stopPropagation here -- doing so blocks the VKB's own key handling. The
+		// input poll captures the resulting text, backspaces, and newline-submit.
+		// Spotlight is paused for the VKB session, so it won't act on these keys.
+		if (isKeyboardVisible()) {
 			return;
 		}
 
@@ -330,17 +351,31 @@ class TerminalView extends Component {
 	};
 
 	handleTerminalRegionActivate = (event) => {
+		// While the system VKB is up, its ENG (language) list and umlaut/accent
+		// popups render in the app area above the keyboard. Swallowing the pointer
+		// event here blocks those clicks (webOS shows the red "blocked" pointer and
+		// nothing happens), so let the VKB fully own pointer input while it is open.
+		if (isKeyboardVisible()) {
+			return;
+		}
+
 		event?.preventDefault?.();
 		event?.stopPropagation?.();
 		this.activateTerminalInput(true);
 	};
 
 	handleProxyFocus = () => {
+		// Keep Spotlight paused while the proxy holds focus so it cannot steal
+		// focus back and close the VKB.
 		pauseSpotlightForKeyboard();
 	};
 
 	handleProxyBlur = () => {
-		resumeSpotlightForKeyboard();
+		// The VKB can blur the proxy while still open (e.g. navigating its left
+		// column). Only resume Spotlight once the keyboard is actually hidden.
+		if (!isKeyboardVisible()) {
+			resumeSpotlightForKeyboard();
+		}
 	};
 
 	handleShowKeyboard = () => {
@@ -348,6 +383,7 @@ class TerminalView extends Component {
 	};
 
 	handleKeyboardHidden = () => {
+		resumeSpotlightForKeyboard();
 		this.stopProxyInputPoll();
 		this.scheduleFit();
 	};
@@ -366,7 +402,6 @@ class TerminalView extends Component {
 		this.stopProxyInputPoll();
 		this.unbindKeyboardVisibility?.();
 		resumeSpotlightForKeyboard();
-
 		this.resizeObserver?.disconnect();
 		this.session?.close();
 		this.term?.dispose();
@@ -410,7 +445,7 @@ class TerminalView extends Component {
 					/>
 				</TerminalFocusRegion>
 				{this.shouldUseOnScreenKeyboard() ? (
-					<input
+					<textarea
 						aria-label="Terminal keyboard input"
 						autoCapitalize="off"
 						autoComplete="off"
@@ -424,9 +459,9 @@ class TerminalView extends Component {
 						onInput={this.handleProxyInput}
 						onKeyDown={this.handleProxyKeyDown}
 						ref={this.setProxyInputRef}
+						rows={1}
 						spellCheck={false}
 						tabIndex={0}
-						type="text"
 					/>
 				) : null}
 			</div>

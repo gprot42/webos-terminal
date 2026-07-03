@@ -99,6 +99,7 @@ export function getInputLanguage () {
 }
 
 const VKB_ARROW_KEY_CODES = new Set([37, 38, 39, 40]);
+const VKB_SELECT_KEY_CODES = new Set([13, 16777221]);
 
 export function setKeyboardLayoutLock (locked) {
 	if (typeof document === 'undefined') {
@@ -127,6 +128,12 @@ export function shieldVkbArrowKey (event) {
 	// Magic Remote navigation on the system VKB (language/accent column keys).
 	event.stopPropagation();
 	return true;
+}
+
+export function isVkbSelectKey (event) {
+	const code = event?.keyCode || event?.which;
+
+	return VKB_SELECT_KEY_CODES.has(code);
 }
 
 export function bindKeyboardVisibility (onVisible, onHidden) {

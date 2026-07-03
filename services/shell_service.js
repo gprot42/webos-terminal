@@ -16,8 +16,8 @@ function getSession (sessionId) {
 }
 
 var SHELL_NOISE = [
-	/\/bin\/sh: can't access tty; job control turned off\r?\n?/g,
-	/script: failed to create pseudo-terminal:.*\r?\n?/g
+	/[^\n]*can't access tty[;:] job control turned off[^\n]*\r?\n?/g,
+	/[^\n]*failed to create pseudo-terminal[^\n]*\r?\n?/g
 ];
 
 function filterShellNoise (text) {
@@ -82,15 +82,63 @@ service.register('open', function (message) {
 		});
 	}
 
+	// The job-control warning is emitted once, at startup, on stderr and may be
+	// split across chunks -- so a per-chunk filter can miss it. Buffer the first
+	// bit of stderr until the warning line completes (a newline arrives) or a
+	// short grace period elapses, filter the assembled text, then pass through.
+	var noiseCleared = false;
+	var noiseBuffer = '';
+	var noiseTimer = null;
+
+	function flushStartupNoise () {
+		if (noiseCleared) {
+			return;
+		}
+
+		noiseCleared = true;
+
+		if (noiseTimer) {
+			clearTimeout(noiseTimer);
+			noiseTimer = null;
+		}
+
+		var pending = noiseBuffer;
+		noiseBuffer = '';
+
+		if (pending) {
+			sendOutput('stderr', pending);
+		}
+	}
+
+	function handleStderr (chunk) {
+		if (noiseCleared) {
+			sendOutput('stderr', chunk);
+			return;
+		}
+
+		noiseBuffer += chunk.toString();
+
+		if (noiseBuffer.indexOf('\n') !== -1 || noiseBuffer.length > 4096) {
+			flushStartupNoise();
+		}
+	}
+
+	noiseTimer = setTimeout(flushStartupNoise, 500);
+
 	shell.stdout.on('data', function (data) {
 		sendOutput('stdout', data);
 	});
 
 	shell.stderr.on('data', function (data) {
-		sendOutput('stderr', data);
+		handleStderr(data);
 	});
 
 	shell.on('close', function (code) {
+		if (noiseTimer) {
+			clearTimeout(noiseTimer);
+			noiseTimer = null;
+		}
+
 		message.respond({
 			returnValue: true,
 			sessionId: sessionId,

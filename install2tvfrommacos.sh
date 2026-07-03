@@ -191,8 +191,11 @@ install_ipk() {
 	install_js="$(ares_js ares-install)"
 
 	section "Installing to TV"
-	max_attempts=5
-	delay=5
+	# ares-install's SSH exec channel is flaky against this TV's dropbear (fails
+	# with "Unable to exec"); one quick retry catches transient hiccups without
+	# burning time on a failure mode that the SSH fallback below handles anyway.
+	max_attempts=2
+	delay=3
 	# Dropbear on the TV can reject rapid back-to-back SSH exec channels.
 	sleep 3
 	for attempt in $(seq 1 "$max_attempts"); do
@@ -208,7 +211,6 @@ install_ipk() {
 		if [[ "$attempt" -lt "$max_attempts" ]]; then
 			printf "  %s\n" "$(c_ylw "Install failed (attempt $attempt/$max_attempts), retrying in ${delay}s...")"
 			sleep "$delay"
-			[[ "$delay" -lt 30 ]] && delay=$((delay * 2))
 		fi
 	done
 
