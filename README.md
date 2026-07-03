@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="webos-meta/icon-large.png" alt="webOS Terminal" width="128">
+</p>
+
 # webOS Terminal
 
 A native terminal app for LG webOS TVs. Open a shell right on your TV — no laptop required.
