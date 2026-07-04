@@ -17,7 +17,7 @@ import {
 	resumeSpotlightForKeyboard,
 	syncProxyInputDelta
 } from '../../utils/keyboard';
-import {clampTerminalRows, KEYBOARD_MODES} from '../../utils/settings';
+import {clampFontSize, clampTerminalRows, KEYBOARD_MODES} from '../../utils/settings';
 
 import css from './Terminal.module.less';
 import '@xterm/xterm/css/xterm.css';
@@ -58,6 +58,10 @@ class TerminalView extends Component {
 		if (prevProps.settings?.terminalRows !== this.props.settings?.terminalRows) {
 			this.applyTerminalSize();
 		}
+
+		if (prevProps.settings?.fontSize !== this.props.settings?.fontSize) {
+			this.applyFontSize();
+		}
 	}
 
 	setContainerRef = (node) => {
@@ -81,7 +85,7 @@ class TerminalView extends Component {
 			this.term = new Terminal({
 				cursorBlink: true,
 				convertEol: true,
-				fontSize: 18,
+				fontSize: this.getConfiguredFontSize(),
 				fontFamily: 'Menlo, Monaco, "Courier New", monospace',
 				theme: {
 					background: '#1a1a1a',
@@ -150,6 +154,23 @@ class TerminalView extends Component {
 
 	getConfiguredRows () {
 		return clampTerminalRows(this.props.settings?.terminalRows);
+	}
+
+	getConfiguredFontSize () {
+		return clampFontSize(this.props.settings?.fontSize);
+	}
+
+	applyFontSize () {
+		if (!this.term) {
+			return;
+		}
+
+		const fontSize = this.getConfiguredFontSize();
+
+		if (this.term.options.fontSize !== fontSize) {
+			this.term.options.fontSize = fontSize;
+			this.applyTerminalSize();
+		}
 	}
 
 	shouldUseOnScreenKeyboard () {

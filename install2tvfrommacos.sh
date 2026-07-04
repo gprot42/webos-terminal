@@ -219,12 +219,41 @@ install_ipk() {
 	printf "  %s\n" "$(c_grn "Installed $ipk (via SSH)")"
 }
 
+launch_app_ssh() {
+	local payload
+	payload="$(printf '{"id":"%s"}' "$APP_ID")"
+	ssh_tv "/usr/bin/luna-send-pub -n 1 -f -a '${APP_ID}' -i 'luna://com.webos.applicationManager/launch' '${payload}'" >/dev/null
+}
+
 launch_app() {
-	local launch_js
+	local launch_js attempt max_attempts delay
 	launch_js="$(ares_js ares-launch)"
 	section "Launching app"
-	node20 "$launch_js" -d "$DEVICE" "$APP_ID"
-	printf "  %s\n" "$(c_grn "Launched $APP_ID")"
+
+	# ares-launch's SSH exec channel is flaky against this TV's dropbear (fails
+	# with "Unable to exec"), same as ares-install; retry then fall back to a
+	# direct luna-send launch over SSH.
+	max_attempts=2
+	delay=3
+	for attempt in $(seq 1 "$max_attempts"); do
+		wait_for_ssh || {
+			printf "  %s\n" "$(c_ylw "SSH not ready (attempt $attempt/$max_attempts)")"
+			sleep "$delay"
+			continue
+		}
+		if node20 "$launch_js" -d "$DEVICE" "$APP_ID"; then
+			printf "  %s\n" "$(c_grn "Launched $APP_ID")"
+			return
+		fi
+		if [[ "$attempt" -lt "$max_attempts" ]]; then
+			printf "  %s\n" "$(c_ylw "Launch failed (attempt $attempt/$max_attempts), retrying in ${delay}s...")"
+			sleep "$delay"
+		fi
+	done
+
+	section "Launching via SSH fallback"
+	launch_app_ssh
+	printf "  %s\n" "$(c_grn "Launched $APP_ID (via SSH)")"
 }
 
 main() {

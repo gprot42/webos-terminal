@@ -4,7 +4,7 @@ import Heading from '@enact/limestone/Heading';
 import {Panel, Header} from '@enact/limestone/Panels';
 import RadioItem from '@enact/limestone/RadioItem';
 
-import {KEYBOARD_MODES, TERMINAL_ROW_OPTIONS} from '../utils/settings';
+import {FONT_SIZE_OPTIONS, KEYBOARD_MODES, TERMINAL_ROW_OPTIONS} from '../utils/settings';
 
 import css from './SettingsPanel.module.less';
 
@@ -53,6 +53,24 @@ const SettingsPanel = kind({
 					<BodyText className={css.help} size="small">
 						Number of visible terminal lines. Width still adjusts to the
 						screen; only the row count is fixed.
+					</BodyText>
+				</div>
+				<div className={css.column}>
+					<Heading size="small" showLine>Font size</Heading>
+					<div className={css.rowGrid}>
+						{FONT_SIZE_OPTIONS.map((size) => (
+							<RadioItem
+								className={css.rowOption}
+								key={size}
+								onToggle={() => onSettingsChange?.({fontSize: size})}
+								selected={settings.fontSize === size}
+							>
+								{`${size} px`}
+							</RadioItem>
+						))}
+					</div>
+					<BodyText className={css.help} size="small">
+						Terminal text size. Larger text shows fewer characters per line.
 					</BodyText>
 				</div>
 				<div className={css.column}>

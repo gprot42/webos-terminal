@@ -6,6 +6,10 @@
 
 A native terminal app for LG webOS TVs. Open a shell right on your TV — no laptop required.
 
+<p align="center">
+  <img src="docs/images/screengrab1.jpg" alt="webOS Terminal running on TV with on-screen keyboard" width="800">
+</p>
+
 ## What is this?
 
 webOS Terminal brings a familiar command-line experience to your TV. Launch it from the app launcher, type commands, and interact with the Linux shell underneath webOS — all from the couch, using your remote.
