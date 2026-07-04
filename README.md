@@ -6,6 +6,8 @@
 
 A native terminal app for LG webOS TVs. Open a shell right on your TV — no laptop required.
 
+> **Root required.** This app only works on a **rooted** LG webOS TV with **Homebrew Channel** installed. Stock (non-rooted) TVs are not supported — LG blocks the shell access the app needs.
+
 <p align="center">
   <img src="docs/images/screengrab1.jpg" alt="webOS Terminal running on TV with on-screen keyboard" width="800">
 </p>
@@ -14,7 +16,7 @@ A native terminal app for LG webOS TVs. Open a shell right on your TV — no lap
 
 webOS Terminal brings a familiar command-line experience to your TV. Launch it from the app launcher, type commands, and interact with the Linux shell underneath webOS — all from the couch, using your remote.
 
-It is built for people who root or homebrew their TV and want quick on-device access for tinkering, debugging, or running simple commands without SSH from another machine.
+It is built for people who have already rooted their TV and want quick on-device shell access for tinkering, debugging, or running simple commands — without SSH from another machine.
 
 ## Why use it?
 
@@ -45,19 +47,21 @@ Planned for later:
 
 ## Requirements
 
-- An **LG webOS TV**
-- A **rooted** TV with **Homebrew Channel** installed (primary target for now)
-- webOS 4.x or newer recommended
+**You must have a rooted TV.** Without root, the terminal cannot access a real shell and the app will not work.
 
-Non-rooted TVs are not fully supported yet. Shell access on stock TVs is limited by LG’s platform restrictions.
+- **Rooted LG webOS TV** — see [webosbrew.org/rooting](https://www.webosbrew.org/rooting/) or [cani.rootmy.tv](https://cani.rootmy.tv)
+- **Homebrew Channel** — installed as part of rooting; needed for SSH during install and for shell services at runtime
+- **webOS 4.x or newer** recommended
+
+**Not supported:** stock/non-rooted TVs, Developer Mode–only setups without root, and TVs without Homebrew Channel. Sideloading the app onto an unrooted TV will not give you a working terminal.
 
 ## Getting started
 
 See **[README.install](README.install)** for step-by-step installation and first-launch instructions.
 
-Quick summary:
+Quick summary (rooted TVs only):
 
-1. Root your TV and install Homebrew Channel (if you have not already).
+1. **Root your TV** and install Homebrew Channel — this is mandatory, not optional.
 2. Sideload webOS Terminal from a computer — see **[README.install](README.install)**.
 3. Launch **webOS Terminal** from your app list.
 
