@@ -65,6 +65,8 @@ Quick summary (rooted TVs only):
 2. Sideload webOS Terminal from a computer — see **[README.install](README.install)**.
 3. Launch **webOS Terminal** from your app list.
 
+To run the terminal as **root** (not the default `prisoner` user), see **[Running as root](README.install#running-as-root)** in the install guide.
+
 ## Status
 
 This is an **early MVP**. It works for basic interactive shell use on rooted devices. Some advanced terminal features — full-screen editors, complex TUI apps — may not behave perfectly yet.
@@ -74,3 +76,8 @@ Feedback and contributions are welcome.
 ## License
 
 MIT
+
+## Tested on
+
+- OLED55C56LB / webOS 25
+- UP7550PTC / webOS 6.5.3

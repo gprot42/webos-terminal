@@ -123,6 +123,21 @@ ls /
 
 ---
 
+## Running as root
+
+By default the terminal runs as the `prisoner` user inside the homebrew jail. To run it as root, elevate the shell service once from a computer on the same network:
+
+```bash
+ssh root@YOUR_TV_IP
+/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+```
+
+Restart webOS Terminal (or reboot the TV). Confirm with `id` or `whoami` — you should see `uid=0(root)`.
+
+Open Homebrew Channel once after each boot so root services stay active.
+
+---
+
 ## Troubleshooting
 
 ### The app opens but shows no shell / an error message
@@ -133,7 +148,8 @@ ls /
 
 ### Commands fail with “permission denied”
 
-- The app may be running without root privileges. On rooted TVs, ensure Homebrew Channel elevation is active.
+- The app may be running as `prisoner` without root privileges. See **[Running as root](#running-as-root)** above.
+- Open Homebrew Channel once after boot so elevation and root services stay active.
 - Some system paths are protected even on rooted devices.
 
 ### I only see a browser-style preview when developing
