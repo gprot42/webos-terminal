@@ -62,13 +62,16 @@ function spawnPipedShell (env, cwd) {
 }
 
 // Spawns the interactive shell, preferring a real PTY via `script` when
-// available. `onReady(shell, usingPty)` is called once a shell process is
-// running (falling back synchronously if the PTY attempt errors immediately).
+// available. `onReady(shell, usingPty, pendingStdout)` is called once a
+// shell process is running (falling back if the PTY attempt errors, or is
+// silently stuck -- see below). `pendingStdout` is an array of Buffers
+// already emitted by the shell before the caller could attach its own
+// listeners, and must be replayed through the normal output path.
 function spawnInteractiveShell (env, cwd, onReady) {
 	var scriptBin = findScriptBinary();
 
 	if (!scriptBin) {
-		onReady(spawnPipedShell(env, cwd), false);
+		onReady(spawnPipedShell(env, cwd), false, []);
 		return;
 	}
 
@@ -79,6 +82,17 @@ function spawnInteractiveShell (env, cwd, onReady) {
 		cwd: cwd
 	});
 	var settled = false;
+	var pending = [];
+
+	function bufferChunk (chunk) {
+		pending.push(chunk);
+	}
+
+	ptyShell.stdout.on('data', bufferChunk);
+
+	function stopBuffering () {
+		ptyShell.stdout.removeListener('data', bufferChunk);
+	}
 
 	ptyShell.once('error', function () {
 		if (settled) {
@@ -86,19 +100,31 @@ function spawnInteractiveShell (env, cwd, onReady) {
 		}
 
 		settled = true;
-		onReady(spawnPipedShell(env, cwd), false);
+		stopBuffering();
+		onReady(spawnPipedShell(env, cwd), false, []);
 	});
 
-	// Give the PTY attempt a brief window to fail (e.g. permission denied in
-	// the jail) before committing to it; child_process 'error' fires async.
+	// This TV's `script` binary appears to need a controlling terminal to
+	// bridge the pty; the service runs headless with none, so instead of
+	// erroring it just hangs producing no output at all. Give the PTY
+	// attempt a window to actually emit something; if nothing arrives,
+	// assume it's stuck, kill it, and fall back to the piped shell (which
+	// works fine without a tty).
 	setTimeout(function () {
 		if (settled) {
 			return;
 		}
 
 		settled = true;
-		onReady(ptyShell, true);
-	}, 150);
+		stopBuffering();
+
+		if (pending.length) {
+			onReady(ptyShell, true, pending);
+		} else {
+			ptyShell.kill('SIGKILL');
+			onReady(spawnPipedShell(env, cwd), false, []);
+		}
+	}, 800);
 }
 
 service.register('open', function (message) {
@@ -119,11 +145,11 @@ service.register('open', function (message) {
 	env.COLUMNS = String(cols);
 	env.LINES = String(rows);
 
-	spawnInteractiveShell(env, cwd, function (shell, usingPty) {
-		startSession(shell, usingPty);
+	spawnInteractiveShell(env, cwd, function (shell, usingPty, pendingStdout) {
+		startSession(shell, usingPty, pendingStdout);
 	});
 
-	function startSession (shell, usingPty) {
+	function startSession (shell, usingPty, pendingStdout) {
 	sessions[sessionId] = {
 		shell: shell,
 		cols: cols,
@@ -195,6 +221,12 @@ service.register('open', function (message) {
 	}
 
 	noiseTimer = setTimeout(flushStartupNoise, 500);
+
+	// Replay any output the shell emitted before we could attach the
+	// listener below (see spawnInteractiveShell's PTY-hang detection).
+	(pendingStdout || []).forEach(function (chunk) {
+		sendOutput('stdout', chunk);
+	});
 
 	shell.stdout.on('data', function (data) {
 		sendOutput('stdout', data);
