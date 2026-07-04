@@ -57,15 +57,15 @@ Planned for later:
 
 ## Getting started
 
-See **[README.install](README.install)** for step-by-step installation and first-launch instructions.
+See **[README.install.md](README.install.md)** for step-by-step installation and first-launch instructions.
 
 Quick summary (rooted TVs only):
 
 1. **Root your TV** and install Homebrew Channel — this is mandatory, not optional.
-2. Sideload webOS Terminal from a computer — see **[README.install](README.install)**.
+2. Sideload webOS Terminal from a computer — see **[README.install.md](README.install.md)**.
 3. Launch **webOS Terminal** from your app list.
 
-To run the terminal as **root** (not the default `prisoner` user), see **[Running as root](README.install#running-as-root)** in the install guide.
+To run the terminal as **root** (not the default `prisoner` user), see **[Running as root](README.install.md#running-as-root)** in the install guide.
 
 ## Status
 
