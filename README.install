@@ -14,24 +14,31 @@ You will need:
 
 ---
 
-## Option A: Install from Homebrew Channel (easiest)
+## Install from a computer
 
-Once webOS Terminal is published to the Homebrew app store:
+webOS Terminal is not in the Homebrew Channel app store yet. Install it by sideloading from a computer on the same network as your TV.
 
-1. Open **Homebrew Channel** on your TV.
-2. Find **webOS Terminal** in the app list.
-3. Select it and press **Install**.
-4. When installation finishes, press **Launch**.
+### Option 1: Install script (macOS, recommended)
 
-That is it. The app and its shell service are installed together.
+If you are on macOS and have cloned this repository, the fastest path is:
 
----
+```bash
+./install2tvfrommacos.sh
+```
 
-## Option B: Manual install (from a computer)
+The script builds the app, packages an IPK, configures SSH/ares if needed, installs to your TV, and launches the app. Set `TV_IP` if your TV is not at the default address:
 
-Use this if the app is not yet in the Homebrew store, or you are testing a build yourself.
+```bash
+TV_IP=192.168.0.50 ./install2tvfrommacos.sh
+```
 
-### 1. Set up your computer
+Prerequisites: `npm`, the Enact CLI (`enact`), and `@webosose/ares-cli` installed globally. Your TV needs Homebrew Channel with **SSH enabled** (as `root` on port 22).
+
+### Option 2: Manual install
+
+Use this on other platforms, or if you prefer to run each step yourself.
+
+#### 1. Set up your computer
 
 Install the webOS TV CLI tools:
 
@@ -39,7 +46,7 @@ Install the webOS TV CLI tools:
 npm install -g @webosose/ares-cli
 ```
 
-### 2. Connect your TV
+#### 2. Connect your TV
 
 **Rooted TV (recommended):**
 
@@ -62,9 +69,9 @@ ares-setup-device -a webos \
 2. Enable developer mode and download the TV key from `http://YOUR_TV_IP:9991/webos_rsa`
 3. Register with `ares-setup-device` using username `prisoner`, port `9922`, and the downloaded key.
 
-### 3. Build the app (developers only)
+#### 3. Build the app
 
-If you are installing from source:
+From the repository root:
 
 ```bash
 git clone <repository-url>
@@ -75,7 +82,7 @@ npm run build
 
 This produces a `dist/` folder with the app and shell service.
 
-### 4. Package and install
+#### 4. Package and install
 
 ```bash
 cd dist
@@ -85,13 +92,19 @@ ares-install org.webosbrew.terminal_0.1.0_all.ipk
 
 Replace the version number in the filename if yours differs.
 
-### 5. Launch the app
+#### 5. Launch the app
 
 ```bash
 ares-launch org.webosbrew.terminal
 ```
 
 Or find **webOS Terminal** in your TV’s app launcher.
+
+---
+
+## Homebrew Channel app store (not yet available)
+
+webOS Terminal is not published to the Homebrew Channel store yet. When it is, you will be able to install it from the TV without a computer. Until then, use the sideload steps above.
 
 ---
 
@@ -140,15 +153,13 @@ ls /
 ares-install org.webosbrew.terminal_0.1.0_all.ipk
 ```
 
-Installing again over an existing copy is safe. In Homebrew Channel, you can also press **5** on an app’s detail page to force a reinstall.
+Installing again over an existing copy is safe. Re-run `./install2tvfrommacos.sh` or `ares-install` with the new IPK to update.
 
 ---
 
 ## Uninstalling
 
-**From Homebrew Channel:** open the app’s page and select **Uninstall**.
-
-**From a computer:**
+From a computer:
 
 ```bash
 ares-install --remove org.webosbrew.terminal

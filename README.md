@@ -57,8 +57,8 @@ See **[README.install](README.install)** for step-by-step installation and first
 
 Quick summary:
 
-1. Install Homebrew Channel on your TV (if you have not already).
-2. Install webOS Terminal from the Homebrew app store, or sideload the package manually.
+1. Root your TV and install Homebrew Channel (if you have not already).
+2. Sideload webOS Terminal from a computer — see **[README.install](README.install)**.
 3. Launch **webOS Terminal** from your app list.
 
 ## Status
