@@ -78,6 +78,18 @@ ssh_tv() {
 		-i "$SSH_KEY_PATH" "root@${TV_IP}" "$@"
 }
 
+# This TV's /usr/bin/luna-send-pub is a very old (2011) build with different
+# flag semantics than modern luna-send: the uri/message are POSITIONAL args,
+# and "-i" means "interactive mode" (NOT "pass a uri"). It also fully buffers
+# stdout when not attached to a tty, so a plain non-interactive SSH exec loses
+# all output even though the call itself still runs. Route these through a
+# pty (-tt) and use positional args so we can actually see (and verify) the
+# result.
+luna_send_tv() {
+	ssh -tt -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
+		-i "$SSH_KEY_PATH" "root@${TV_IP}" "$@" 2>&1
+}
+
 wait_for_ssh() {
 	ssh_tv "true" >/dev/null 2>&1
 }
@@ -149,32 +161,32 @@ build_and_package() {
 }
 
 install_ipk_ssh() {
-	local ipk="$1" base remote_dir remote_ipk payload
+	local ipk="$1" base remote_dir remote_ipk payload version output
 	base="$(basename "$ipk")"
 	remote_dir="/media/developer/temp"
 	remote_ipk="${remote_dir}/${base}"
+	version="$(read_version)"
+
+	# Close the app first so webOS doesn't keep the old bundle alive in an
+	# already-running webview process across the reinstall.
+	luna_send_tv "/usr/bin/luna-send-pub -n 1 -w 5000 'luna://com.webos.applicationManager/closeByAppId' '{\"id\":\"${APP_ID}\"}'" >/dev/null 2>&1 || true
 
 	ssh_tv "rm -rf '${remote_dir}' && mkdir -p '${remote_dir}' && chmod 777 '${remote_dir}'"
 	scp -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
 		-i "$SSH_KEY_PATH" "$ipk" "root@${TV_IP}:${remote_ipk}"
 
 	payload="$(printf '{"id":"com.ares.defaultName","ipkUrl":"%s","subscribe":true}' "$remote_ipk")"
-	ssh_tv "/usr/bin/luna-send-pub -w 120000 -i 'luna://com.webos.appInstallService/dev/install' '${payload}'" >/dev/null &
-	local luna_pid=$!
-	local waited=0
-	while [[ "$waited" -lt 120 ]]; do
-		if ssh_tv "test -f /media/developer/apps/usr/palm/applications/${APP_ID}/appinfo.json"; then
-			wait "$luna_pid" 2>/dev/null || true
-			break
-		fi
-		sleep 5
-		waited=$((waited + 5))
-	done
-	kill "$luna_pid" 2>/dev/null || true
-	wait "$luna_pid" 2>/dev/null || true
+	# dev/install streams many progress replies (verifying/parsing/installing)
+	# before a final "installed" state and then a disconnect message; -n 1
+	# only captures the initial subscribe ack, not completion. Collect a
+	# generous number of replies and look for the terminal state.
+	output="$(luna_send_tv "/usr/bin/luna-send-pub -n 60 -w 90000 'luna://com.webos.appInstallService/dev/install' '${payload}'")"
 
-	ssh_tv "test -f /media/developer/apps/usr/palm/applications/${APP_ID}/appinfo.json" \
-		|| die "SSH install did not place ${APP_ID} on the TV"
+	printf '%s\n' "$output" | grep -q '"state":"installed"' \
+		|| die "SSH install did not reach installed state for ${APP_ID} ${version}. Output: $output"
+
+	ssh_tv "grep -q '\"version\": *\"${version}\"' /media/developer/apps/usr/palm/applications/${APP_ID}/appinfo.json" \
+		|| die "SSH install did not update ${APP_ID} to version ${version} on the TV"
 
 	ssh_tv "rm -f '${remote_ipk}'"
 	ssh_tv "/usr/sbin/ls-control scan-services" >/dev/null
@@ -217,9 +229,11 @@ install_ipk() {
 }
 
 launch_app_ssh() {
-	local payload
+	local payload output
 	payload="$(printf '{"id":"%s"}' "$APP_ID")"
-	ssh_tv "/usr/bin/luna-send-pub -n 1 -f -a '${APP_ID}' -i 'luna://com.webos.applicationManager/launch' '${payload}'" >/dev/null
+	output="$(luna_send_tv "/usr/bin/luna-send-pub -n 1 -w 15000 'luna://com.webos.applicationManager/launch' '${payload}'")"
+	printf '%s\n' "$output" | grep -q '"returnValue":true' \
+		|| die "SSH launch failed for ${APP_ID}. Output: $output"
 }
 
 launch_app() {
