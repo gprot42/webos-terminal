@@ -1,5 +1,6 @@
 var child_process = require('child_process');
 var crypto = require('crypto');
+var fs = require('fs');
 var Service = require('webos-service');
 
 var serviceInfo = require('./services.json');
@@ -31,11 +32,81 @@ function filterShellNoise (text) {
 	return filtered;
 }
 
+// The service jail normally has no PTY devices (/dev/ptmx), so `/bin/sh -i`
+// runs piped -- no job control, no readline in the shell itself (we emulate
+// line editing client-side instead). If the service has been elevated
+// (see README: elevate-service) and a `script` binary is present, it may be
+// able to allocate a real pseudo-terminal via openpty(), which restores job
+// control and lets full-screen TUIs (vim, htop, etc.) work. Try that first,
+// and fall back to the piped shell immediately if `script` is missing or
+// fails to spawn.
+var SCRIPT_BIN_CANDIDATES = ['/usr/bin/script', '/bin/script'];
+
+function findScriptBinary () {
+	var i;
+
+	for (i = 0; i < SCRIPT_BIN_CANDIDATES.length; i++) {
+		try {
+			fs.accessSync(SCRIPT_BIN_CANDIDATES[i], fs.constants.X_OK);
+			return SCRIPT_BIN_CANDIDATES[i];
+		} catch (err) {
+			// try next candidate
+		}
+	}
+
+	return null;
+}
+
+function spawnPipedShell (env, cwd) {
+	return child_process.spawn('/bin/sh', ['-i'], {env: env, cwd: cwd});
+}
+
+// Spawns the interactive shell, preferring a real PTY via `script` when
+// available. `onReady(shell, usingPty)` is called once a shell process is
+// running (falling back synchronously if the PTY attempt errors immediately).
+function spawnInteractiveShell (env, cwd, onReady) {
+	var scriptBin = findScriptBinary();
+
+	if (!scriptBin) {
+		onReady(spawnPipedShell(env, cwd), false);
+		return;
+	}
+
+	// util-linux `script -qc "<cmd>" /dev/null` allocates a pty and runs
+	// <cmd> attached to its slave side, discarding the typescript log.
+	var ptyShell = child_process.spawn(scriptBin, ['-qc', '/bin/sh -i', '/dev/null'], {
+		env: env,
+		cwd: cwd
+	});
+	var settled = false;
+
+	ptyShell.once('error', function () {
+		if (settled) {
+			return;
+		}
+
+		settled = true;
+		onReady(spawnPipedShell(env, cwd), false);
+	});
+
+	// Give the PTY attempt a brief window to fail (e.g. permission denied in
+	// the jail) before committing to it; child_process 'error' fires async.
+	setTimeout(function () {
+		if (settled) {
+			return;
+		}
+
+		settled = true;
+		onReady(ptyShell, true);
+	}, 150);
+}
+
 service.register('open', function (message) {
 	var payload = message.payload || {};
 	var cols = payload.cols || 80;
 	var rows = payload.rows || 24;
 	var sessionId = makeSessionId();
+	var cwd = process.env.HOME || '/tmp';
 
 	var env = {};
 	var key;
@@ -48,22 +119,22 @@ service.register('open', function (message) {
 	env.COLUMNS = String(cols);
 	env.LINES = String(rows);
 
-	// The service jail has no PTY devices, so use a piped shell and strip the
-	// harmless job-control warning from its startup output.
-	var shell = child_process.spawn('/bin/sh', ['-i'], {
-		env: env,
-		cwd: process.env.HOME || '/tmp'
+	spawnInteractiveShell(env, cwd, function (shell, usingPty) {
+		startSession(shell, usingPty);
 	});
 
+	function startSession (shell, usingPty) {
 	sessions[sessionId] = {
 		shell: shell,
 		cols: cols,
-		rows: rows
+		rows: rows,
+		usingPty: usingPty
 	};
 
 	message.respond({
 		returnValue: true,
 		sessionId: sessionId,
+		usingPty: usingPty,
 		subscribed: true
 	});
 
@@ -155,6 +226,7 @@ service.register('open', function (message) {
 			errorText: err.message
 		});
 	});
+	}
 });
 
 service.register('write', function (message) {

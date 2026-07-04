@@ -41,6 +41,7 @@ class TerminalView extends Component {
 		this.proxyPollInterval = null;
 		this.initialized = false;
 		this.useWebOSKeyboard = isWebOSTV();
+		this.unregisterCleanup = null;
 		this.state = {
 			initError: null
 		};
@@ -61,6 +62,18 @@ class TerminalView extends Component {
 
 		if (prevProps.settings?.fontSize !== this.props.settings?.fontSize) {
 			this.applyFontSize();
+		}
+
+		if (prevProps.active !== this.props.active) {
+			if (this.props.active) {
+				this.scheduleFit();
+			} else {
+				this.stopProxyInputPoll();
+
+				if (this.proxyInputRef === document.activeElement) {
+					this.proxyInputRef.blur();
+				}
+			}
 		}
 	}
 
@@ -108,7 +121,7 @@ class TerminalView extends Component {
 
 			this.applyTerminalSize();
 
-			registerAppCleanup(() => {
+			this.unregisterCleanup = registerAppCleanup(() => {
 				this.session?.close();
 				this.term?.dispose();
 			});
@@ -195,7 +208,7 @@ class TerminalView extends Component {
 	}
 
 	scheduleFit () {
-		if (isKeyboardVisible()) {
+		if (!this.props.active || isKeyboardVisible()) {
 			return;
 		}
 
@@ -422,6 +435,8 @@ class TerminalView extends Component {
 
 		this.stopProxyInputPoll();
 		this.unbindKeyboardVisibility?.();
+		this.unregisterCleanup?.();
+		this.unregisterCleanup = null;
 		resumeSpotlightForKeyboard();
 		this.resizeObserver?.disconnect();
 		this.session?.close();
@@ -430,7 +445,9 @@ class TerminalView extends Component {
 
 	render () {
 		const {initError} = this.state;
+		const {active = true, tabId = '1'} = this.props;
 		const showKeyboardButton =
+			active &&
 			this.props.settings?.keyboardMode === KEYBOARD_MODES.MANUAL;
 
 		if (initError) {
@@ -455,17 +472,17 @@ class TerminalView extends Component {
 				<TerminalFocusRegion
 					aria-label="Terminal output area"
 					className={css.focusRegion}
-					onClick={this.handleTerminalRegionActivate}
-					onMouseDown={this.handleTerminalRegionActivate}
+					onClick={active ? this.handleTerminalRegionActivate : undefined}
+					onMouseDown={active ? this.handleTerminalRegionActivate : undefined}
 					role="presentation"
-					spotlightId="terminal-focus-region"
+					spotlightId={`terminal-focus-region-${tabId}`}
 				>
 					<div
 						className={css.terminal}
 						ref={this.setContainerRef}
 					/>
 				</TerminalFocusRegion>
-				{this.shouldUseOnScreenKeyboard() ? (
+				{active && this.shouldUseOnScreenKeyboard() ? (
 					<textarea
 						aria-label="Terminal keyboard input"
 						autoCapitalize="off"

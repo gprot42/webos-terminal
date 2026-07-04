@@ -85,6 +85,14 @@ class ShellSession {
 		this.inputBuffer = '';
 		this.mockHistory = [];
 
+		// Client-side command history for native/homebrew modes. Neither mode
+		// has a real tty (no PTY in the service jail, or no stdin channel at
+		// all for the Homebrew spawn fallback), so the shell itself can't do
+		// readline-style recall -- we emulate up/down history ourselves.
+		this.history = [];
+		this.historyIndex = -1;
+		this.historyDraft = '';
+
 		if (isWebOS()) {
 			this._openNativeSession();
 		} else {
@@ -126,7 +134,13 @@ class ShellSession {
 		this.request?.cancel();
 		this.request = new LS2Request();
 		this.mode = 'homebrew';
-		this.onData('\r\n[Using Homebrew Channel spawn service]\r\n$ ');
+		this.onData(
+			'\r\n\x1b[33m[Degraded mode: Homebrew Channel spawn service]\x1b[0m\r\n' +
+			'Each command runs in its own fresh shell -- no persistent state\r\n' +
+			'(cd, exported vars) carries between commands, and there is no job\r\n' +
+			'control or full-screen apps (vim, htop). Command history (up/down)\r\n' +
+			'still works locally.\r\n$ '
+		);
 
 		this.request.send({
 			service: HB_SPAWN_SERVICE,
@@ -181,6 +195,59 @@ class ShellSession {
 		});
 	}
 
+	_pushHistory (command) {
+		if (command && this.history[this.history.length - 1] !== command) {
+			this.history.push(command);
+		}
+
+		this.historyIndex = -1;
+		this.historyDraft = '';
+	}
+
+	_replaceInputLine (newLine) {
+		if (this.localEcho && this.inputBuffer) {
+			this.onData('\b \b'.repeat(this.inputBuffer.length));
+		}
+
+		this.inputBuffer = newLine;
+
+		if (this.localEcho && newLine) {
+			this.onData(newLine);
+		}
+	}
+
+	_historyUp () {
+		if (!this.history.length) {
+			return;
+		}
+
+		if (this.historyIndex === -1) {
+			this.historyDraft = this.inputBuffer;
+			this.historyIndex = this.history.length - 1;
+		} else if (this.historyIndex > 0) {
+			this.historyIndex -= 1;
+		} else {
+			return;
+		}
+
+		this._replaceInputLine(this.history[this.historyIndex]);
+	}
+
+	_historyDown () {
+		if (this.historyIndex === -1) {
+			return;
+		}
+
+		if (this.historyIndex < this.history.length - 1) {
+			this.historyIndex += 1;
+			this._replaceInputLine(this.history[this.historyIndex]);
+		} else {
+			this.historyIndex = -1;
+			this._replaceInputLine(this.historyDraft);
+			this.historyDraft = '';
+		}
+	}
+
 	_handleInteractiveInput (char) {
 		if (char === '\r' || char === '\n') {
 			if (this.localEcho) {
@@ -190,6 +257,7 @@ class ShellSession {
 			if (this.mode === 'homebrew') {
 				const command = this.inputBuffer.trim();
 				this.inputBuffer = '';
+				this._pushHistory(command);
 
 				if (command) {
 					this._runHomebrewCommand(command);
@@ -202,6 +270,7 @@ class ShellSession {
 			if (this.mode === 'native') {
 				const line = this.inputBuffer;
 				this.inputBuffer = '';
+				this._pushHistory(line.trim());
 				this._nativeWrite(line + '\n');
 			}
 
@@ -209,6 +278,8 @@ class ShellSession {
 		}
 
 		if (char === '\u007F' || char === '\b') {
+			this.historyIndex = -1;
+
 			if (this.inputBuffer.length > 0) {
 				this.inputBuffer = this.inputBuffer.slice(0, -1);
 				if (this.localEcho) {
@@ -219,6 +290,7 @@ class ShellSession {
 		}
 
 		if (char >= ' ') {
+			this.historyIndex = -1;
 			this.inputBuffer += char;
 			if (this.localEcho) {
 				this.onData(char);
@@ -233,6 +305,16 @@ class ShellSession {
 
 		if (this.mode === 'mock') {
 			this._handleMockInput(data);
+			return;
+		}
+
+		if (data === '\x1b[A') {
+			this._historyUp();
+			return;
+		}
+
+		if (data === '\x1b[B') {
+			this._historyDown();
 			return;
 		}
 

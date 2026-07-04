@@ -136,6 +136,21 @@ Restart webOS Terminal (or reboot the TV). Confirm with `id` or `whoami` — you
 
 Open Homebrew Channel once after each boot so root services stay active.
 
+### Auto-elevate on every boot
+
+The one-time `elevate-service` command above persists across normal reboots. If you want it re-applied automatically (e.g. after app updates), add a startup hook:
+
+```bash
+mkdir -p /var/lib/webosbrew/init.d
+cat << 'EOF' > /var/lib/webosbrew/init.d/50-webos-terminal-elevate
+#!/bin/sh
+exec /media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+EOF
+chmod +x /var/lib/webosbrew/init.d/50-webos-terminal-elevate
+```
+
+Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
+
 ---
 
 ## Troubleshooting

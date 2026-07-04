@@ -37,11 +37,11 @@ In this early release you can:
 - Run common shell commands interactively
 - Use the app with your TV remote and on-screen keyboard
 - Work on a TV-sized terminal with readable text and scrolling
+- Open multiple tabs, each with its own shell session
 
 Planned for later:
 
 - File browsing
-- Multiple tabs
 - Command history and autocomplete
 - Log viewing
 
@@ -65,7 +65,7 @@ Quick summary (rooted TVs only):
 2. Sideload webOS Terminal from a computer — see **[README.install.md](README.install.md)**.
 3. Launch **webOS Terminal** from your app list.
 
-To run the terminal as **root** (not the default `prisoner` user), see **[Running as root](README.install.md#running-as-root)** in the install guide.
+To run the terminal as **root** (not the default `prisoner` user), see **[Running as root](README.install.md#running-as-root)** in the install guide (includes an optional [auto-elevate on boot](README.install.md#auto-elevate-on-every-boot) hook).
 
 ## Status
 
