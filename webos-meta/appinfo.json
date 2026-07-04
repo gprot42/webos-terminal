@@ -1,6 +1,6 @@
 {
 	"id": "org.webosbrew.terminal",
-	"version": "0.1.0",
+	"version": "0.0.2",
 	"vendor": "webOS Homebrew",
 	"type": "web",
 	"main": "index.html",

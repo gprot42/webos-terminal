@@ -1,13 +1,13 @@
 {
 	"name": "webos-terminal",
-	"version": "0.1.0",
+	"version": "0.0.2",
 	"description": "Native terminal emulator for LG webOS TVs",
 	"author": "webOS Homebrew",
 	"main": "src/index.js",
 	"scripts": {
 		"serve": "enact serve",
-		"pack": "enact pack",
-		"pack-p": "enact pack -p",
+		"pack": "node scripts/sync-version.js && enact pack && node scripts/downlevel-syntax.js",
+		"pack-p": "node scripts/sync-version.js && enact pack -p && node scripts/downlevel-syntax.js",
 		"watch": "enact pack --watch",
 		"clean": "enact clean",
 		"lint": "enact lint .",
@@ -44,5 +44,10 @@
 		"react": "^19.2.7",
 		"react-dom": "^19.2.7",
 		"web-vitals": "^5.3.0"
+	},
+	"devDependencies": {
+		"@babel/core": "^7.26.0",
+		"@babel/plugin-transform-nullish-coalescing-operator": "^7.26.0",
+		"@babel/plugin-transform-optional-chaining": "^7.25.9"
 	}
 }

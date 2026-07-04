@@ -83,10 +83,7 @@ wait_for_ssh() {
 }
 
 read_version() {
-	python3 - <<'PY' "$SCRIPT_DIR/webos-meta/appinfo.json"
-import json, sys
-print(json.load(open(sys.argv[1]))["version"])
-PY
+	node "$SCRIPT_DIR/scripts/read-version.js"
 }
 
 ensure_deploy_key() {

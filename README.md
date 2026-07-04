@@ -67,7 +67,7 @@ Quick summary (rooted TVs only):
 
 ## Status
 
-This is an **early MVP** (v0.1.0). It works for basic interactive shell use on rooted devices. Some advanced terminal features — full-screen editors, complex TUI apps — may not behave perfectly yet.
+This is an **early MVP**. It works for basic interactive shell use on rooted devices. Some advanced terminal features — full-screen editors, complex TUI apps — may not behave perfectly yet.
 
 Feedback and contributions are welcome.
 

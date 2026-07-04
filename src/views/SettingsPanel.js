@@ -5,6 +5,7 @@ import {Panel, Header} from '@enact/limestone/Panels';
 import RadioItem from '@enact/limestone/RadioItem';
 
 import {FONT_SIZE_OPTIONS, KEYBOARD_MODES, TERMINAL_ROW_OPTIONS} from '../utils/settings';
+import {VERSION} from '../version';
 
 import css from './SettingsPanel.module.less';
 
@@ -35,76 +36,83 @@ const SettingsPanel = kind({
 	render: ({settings, onSettingsChange, onSelectAuto, onSelectManual, onSelectPhysical, ...rest}) => (
 		<Panel {...rest}>
 			<Header title="Settings" subtitle="Keyboard, input, and display" noCloseButton />
-			<div className={css.content}>
-				<div className={css.column}>
-					<Heading size="small" showLine>Terminal rows</Heading>
-					<div className={css.rowGrid}>
-						{TERMINAL_ROW_OPTIONS.map((rows) => (
+			<div className={css.body}>
+				<div className={css.content}>
+					<div className={css.columns}>
+						<div className={css.column}>
+							<Heading size="small" showLine>Terminal rows</Heading>
+							<div className={css.rowGrid}>
+								{TERMINAL_ROW_OPTIONS.map((rows) => (
+									<RadioItem
+										className={css.rowOption}
+										key={rows}
+										onToggle={() => onSettingsChange?.({terminalRows: rows})}
+										selected={settings.terminalRows === rows}
+									>
+										{`${rows} rows`}
+									</RadioItem>
+								))}
+							</div>
+							<BodyText className={css.help} size="small">
+								Number of visible terminal lines. Width still adjusts to the
+								screen; only the row count is fixed.
+							</BodyText>
+						</div>
+						<div className={css.column}>
+							<Heading size="small" showLine>Font size</Heading>
+							<div className={css.rowGrid}>
+								{FONT_SIZE_OPTIONS.map((size) => (
+									<RadioItem
+										className={css.rowOption}
+										key={size}
+										onToggle={() => onSettingsChange?.({fontSize: size})}
+										selected={settings.fontSize === size}
+									>
+										{`${size} px`}
+									</RadioItem>
+								))}
+							</div>
+							<BodyText className={css.help} size="small">
+								Terminal text size. Larger text shows fewer characters per line.
+							</BodyText>
+						</div>
+						<div className={css.column}>
+							<Heading size="small" showLine>Keyboard input</Heading>
 							<RadioItem
-								className={css.rowOption}
-								key={rows}
-								onToggle={() => onSettingsChange?.({terminalRows: rows})}
-								selected={settings.terminalRows === rows}
+								selected={settings.keyboardMode === KEYBOARD_MODES.AUTO}
+								onToggle={onSelectAuto}
 							>
-								{`${rows} rows`}
+								On-screen keyboard (automatic)
 							</RadioItem>
-						))}
-					</div>
-					<BodyText className={css.help} size="small">
-						Number of visible terminal lines. Width still adjusts to the
-						screen; only the row count is fixed.
-					</BodyText>
-				</div>
-				<div className={css.column}>
-					<Heading size="small" showLine>Font size</Heading>
-					<div className={css.rowGrid}>
-						{FONT_SIZE_OPTIONS.map((size) => (
 							<RadioItem
-								className={css.rowOption}
-								key={size}
-								onToggle={() => onSettingsChange?.({fontSize: size})}
-								selected={settings.fontSize === size}
+								selected={settings.keyboardMode === KEYBOARD_MODES.MANUAL}
+								onToggle={onSelectManual}
 							>
-								{`${size} px`}
+								On-screen keyboard (manual)
 							</RadioItem>
-						))}
+							<RadioItem
+								selected={settings.keyboardMode === KEYBOARD_MODES.PHYSICAL}
+								onToggle={onSelectPhysical}
+							>
+								Physical keyboard only
+							</RadioItem>
+							<BodyText className={css.help} size="small">
+								Tap the terminal area to open the on-screen keyboard. Use ENG on
+								the keyboard (left column, above the umlaut key) to switch
+								languages.
+							</BodyText>
+							<BodyText className={css.help} size="small">
+								Phone remote: the LG ThinQ / Screen Remote app can also type into
+								the on-screen keyboard while it is open. USB or Bluetooth
+								keyboards work automatically; webOS hides the on-screen keyboard
+								when physical keys are pressed.
+							</BodyText>
+						</div>
 					</div>
-					<BodyText className={css.help} size="small">
-						Terminal text size. Larger text shows fewer characters per line.
-					</BodyText>
 				</div>
-				<div className={css.column}>
-					<Heading size="small" showLine>Keyboard input</Heading>
-					<RadioItem
-						selected={settings.keyboardMode === KEYBOARD_MODES.AUTO}
-						onToggle={onSelectAuto}
-					>
-						On-screen keyboard (automatic)
-					</RadioItem>
-					<RadioItem
-						selected={settings.keyboardMode === KEYBOARD_MODES.MANUAL}
-						onToggle={onSelectManual}
-					>
-						On-screen keyboard (manual)
-					</RadioItem>
-					<RadioItem
-						selected={settings.keyboardMode === KEYBOARD_MODES.PHYSICAL}
-						onToggle={onSelectPhysical}
-					>
-						Physical keyboard only
-					</RadioItem>
-					<BodyText className={css.help} size="small">
-						Tap the terminal area to open the on-screen keyboard. Use ENG on
-						the keyboard (left column, above the umlaut key) to switch
-						languages.
-					</BodyText>
-					<BodyText className={css.help} size="small">
-						Phone remote: the LG ThinQ / Screen Remote app can also type into
-						the on-screen keyboard while it is open. USB or Bluetooth
-						keyboards work automatically; webOS hides the on-screen keyboard
-						when physical keys are pressed.
-					</BodyText>
-				</div>
+				<BodyText className={css.version} size="small">
+					{`Version ${VERSION}`}
+				</BodyText>
 			</div>
 		</Panel>
 	)
