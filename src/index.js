@@ -1,6 +1,7 @@
 /* global ENACT_PACK_ISOMORPHIC */
 import {createRoot, hydrateRoot} from 'react-dom/client';
 
+import './polyfills';
 import App from './App';
 
 const appElement = (<App />);
