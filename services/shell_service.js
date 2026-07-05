@@ -127,12 +127,30 @@ function spawnInteractiveShell (env, cwd, onReady) {
 	}, 800);
 }
 
+function resolveCwd (requestedCwd) {
+	var fallback = process.env.HOME || '/tmp';
+
+	if (!requestedCwd) {
+		return fallback;
+	}
+
+	try {
+		if (fs.statSync(requestedCwd).isDirectory()) {
+			return requestedCwd;
+		}
+	} catch (err) {
+		// requested directory no longer exists -- fall back to HOME
+	}
+
+	return fallback;
+}
+
 service.register('open', function (message) {
 	var payload = message.payload || {};
 	var cols = payload.cols || 80;
 	var rows = payload.rows || 24;
 	var sessionId = makeSessionId();
-	var cwd = process.env.HOME || '/tmp';
+	var cwd = resolveCwd(payload.cwd);
 
 	var env = {};
 	var key;
@@ -300,6 +318,26 @@ service.register('resize', function (message) {
 	session.cols = payload.cols || session.cols;
 	session.rows = payload.rows || session.rows;
 	message.respond({returnValue: true});
+});
+
+// Best-effort current-working-directory lookup for lightweight tab
+// persistence. /proc may not be mounted/readable in every jail, so failures
+// are expected and just mean the client won't remember that tab's directory.
+service.register('getCwd', function (message) {
+	var payload = message.payload || {};
+	var session = getSession(payload.sessionId);
+
+	if (!session || !session.shell || !session.shell.pid) {
+		message.respond({returnValue: false, errorText: 'Session not found'});
+		return;
+	}
+
+	try {
+		var cwd = fs.readlinkSync('/proc/' + session.shell.pid + '/cwd');
+		message.respond({returnValue: true, cwd: cwd});
+	} catch (err) {
+		message.respond({returnValue: false, errorText: err.message});
+	}
 });
 
 service.register('close', function (message) {

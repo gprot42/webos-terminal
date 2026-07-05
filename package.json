@@ -1,6 +1,6 @@
 {
 	"name": "webos-terminal",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"description": "Native terminal emulator for LG webOS TVs",
 	"author": "webOS Homebrew",
 	"main": "src/index.js",
@@ -38,6 +38,7 @@
 		"@enact/ui": "^5.5.1",
 		"@enact/webos": "^5.5.1",
 		"@xterm/addon-fit": "^0.10.0",
+		"@xterm/addon-search": "^0.16.0",
 		"@xterm/xterm": "^5.5.0",
 		"ilib": "npm:ilib-webos@14.21.0-webos1",
 		"prop-types": "^15.8.1",

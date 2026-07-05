@@ -23,7 +23,35 @@
 }
 
 .toolbar {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 12px;
 	padding: 0 24px 12px;
+}
+
+.status {
+	opacity: 0.75;
+	font-size: 24px;
+}
+
+.searchBar {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 12px;
+	padding: 0 24px 12px;
+}
+
+.searchInput {
+	flex: 1;
+	min-width: 0;
+	padding: 8px 12px;
+	font-size: 24px;
+	color: #f0f0f0;
+	background: #2a2a2a;
+	border: 1px solid #4a4a4a;
+	border-radius: 4px;
 }
 
 .terminal {

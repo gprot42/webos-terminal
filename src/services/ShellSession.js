@@ -71,12 +71,14 @@ function isWebOS () {
 }
 
 class ShellSession {
-	constructor ({cols = 80, rows = 24, onData, onExit, onError, localEcho = true}) {
+	constructor ({cols = 80, rows = 24, initialCwd, onData, onExit, onError, onCwdChange, localEcho = true}) {
 		this.cols = cols;
 		this.rows = rows;
+		this.initialCwd = initialCwd;
 		this.onData = onData;
 		this.onExit = onExit;
 		this.onError = onError;
+		this.onCwdChange = onCwdChange;
 		this.localEcho = localEcho;
 		this.sessionId = null;
 		this.request = null;
@@ -105,7 +107,7 @@ class ShellSession {
 		this.request.send({
 			service: TERMINAL_SERVICE,
 			method: 'open',
-			parameters: {cols: this.cols, rows: this.rows},
+			parameters: {cols: this.cols, rows: this.rows, cwd: this.initialCwd},
 			subscribe: true,
 			onSuccess: (response) => {
 				if (response.sessionId && !this.sessionId) {
@@ -272,6 +274,7 @@ class ShellSession {
 				this.inputBuffer = '';
 				this._pushHistory(line.trim());
 				this._nativeWrite(line + '\n');
+				this._pollCwd();
 			}
 
 			return;
@@ -403,6 +406,37 @@ class ShellSession {
 					this.onData(`\x1b[33m${command}: command simulated in browser preview\x1b[0m\r\n`);
 				}
 		}
+	}
+
+	// Best-effort: ask the service what directory the shell is in after each
+	// command, so tab persistence can restore it next launch. Failures (no
+	// /proc in the jail, etc.) are silently ignored -- the tab just won't
+	// remember its directory.
+	_pollCwd () {
+		if (this.mode !== 'native' || !this.onCwdChange) {
+			return;
+		}
+
+		// Give the shell a moment to act on the command (e.g. `cd`) before
+		// asking where it ended up.
+		setTimeout(() => {
+			if (this.closed || this.mode !== 'native' || !this.sessionId) {
+				return;
+			}
+
+			const req = new LS2Request();
+			req.send({
+				service: TERMINAL_SERVICE,
+				method: 'getCwd',
+				parameters: {sessionId: this.sessionId},
+				onSuccess: (response) => {
+					if (response?.cwd) {
+						this.onCwdChange(response.cwd);
+					}
+				},
+				onFailure: () => {}
+			});
+		}, 300);
 	}
 
 	resize (cols, rows) {

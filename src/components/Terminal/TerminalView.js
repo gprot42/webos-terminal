@@ -1,11 +1,13 @@
 import {Component} from 'react';
 import {Terminal} from '@xterm/xterm';
 import {FitAddon} from '@xterm/addon-fit';
+import {SearchAddon} from '@xterm/addon-search';
 import Button from '@enact/limestone/Button';
 import Spottable from '@enact/spotlight/Spottable';
 
 import ShellSession from '../../services/ShellSession';
 import {registerAppCleanup} from '../../utils/closeApp';
+import {copyText, pasteText} from '../../utils/clipboard';
 import {
 	bindKeyboardVisibility,
 	detachTerminalTextarea,
@@ -29,8 +31,10 @@ class TerminalView extends Component {
 		super(props);
 		this.containerRef = null;
 		this.proxyInputRef = null;
+		this.searchInputRef = null;
 		this.term = null;
 		this.fitAddon = null;
+		this.searchAddon = null;
 		this.session = null;
 		this.resizeObserver = null;
 		this.unbindKeyboardVisibility = null;
@@ -42,8 +46,11 @@ class TerminalView extends Component {
 		this.initialized = false;
 		this.useWebOSKeyboard = isWebOSTV();
 		this.unregisterCleanup = null;
+		this.statusTimer = null;
 		this.state = {
-			initError: null
+			initError: null,
+			searchOpen: false,
+			status: null
 		};
 	}
 
@@ -112,6 +119,8 @@ class TerminalView extends Component {
 
 			this.fitAddon = new FitAddon();
 			this.term.loadAddon(this.fitAddon);
+			this.searchAddon = new SearchAddon();
+			this.term.loadAddon(this.searchAddon);
 			this.term.open(this.containerRef);
 			detachTerminalTextarea(this.term);
 			this.unbindKeyboardVisibility = bindKeyboardVisibility(
@@ -130,12 +139,16 @@ class TerminalView extends Component {
 				cols: this.term.cols,
 				rows: this.term.rows,
 				localEcho: !this.useWebOSKeyboard,
+				initialCwd: this.props.initialCwd,
 				onData: (data) => this.term.write(data),
 				onExit: (code) => {
 					this.term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);
 				},
 				onError: (message) => {
 					this.term.writeln(`\r\n\x1b[33m${message}\x1b[0m`);
+				},
+				onCwdChange: (cwd) => {
+					this.props.onCwdChange?.(cwd);
 				}
 			});
 
@@ -143,6 +156,8 @@ class TerminalView extends Component {
 				this.term.onData((data) => {
 					this.session.write(data);
 				});
+
+				this.term.attachCustomKeyEventHandler(this.handleTermKeyEvent);
 			}
 
 			this.term.onResize(({cols, rows}) => {
@@ -422,6 +437,111 @@ class TerminalView extends Component {
 		this.scheduleFit();
 	};
 
+	showStatus (message) {
+		if (this.statusTimer) {
+			window.clearTimeout(this.statusTimer);
+		}
+
+		this.setState({status: message});
+		this.statusTimer = window.setTimeout(() => {
+			this.statusTimer = null;
+			this.setState({status: null});
+		}, 1500);
+	}
+
+	// Ctrl+C/Ctrl+V are reserved for SIGINT and literal paste-from-native-menu
+	// conventions on a real terminal, so copy/paste shortcuts use Ctrl+Shift
+	// instead. Returning false tells xterm.js to swallow the key itself
+	// (not forward it to the shell); returning true lets it pass through.
+	handleTermKeyEvent = (event) => {
+		if (event.type !== 'keydown' || !event.ctrlKey || !event.shiftKey) {
+			return true;
+		}
+
+		if (event.key === 'C' || event.key === 'c') {
+			this.handleCopy();
+			return false;
+		}
+
+		if (event.key === 'V' || event.key === 'v') {
+			this.handlePaste();
+			return false;
+		}
+
+		return true;
+	};
+
+	handleCopy = async () => {
+		const selection = this.term?.getSelection();
+
+		if (!selection) {
+			this.showStatus('Nothing selected');
+			return;
+		}
+
+		const ok = await copyText(selection);
+		this.showStatus(ok ? 'Copied' : 'Copy failed');
+	};
+
+	handlePaste = async () => {
+		const text = await pasteText();
+
+		if (!text) {
+			this.showStatus('Clipboard empty');
+			return;
+		}
+
+		this.session?.write(text);
+	};
+
+	toggleSearch = () => {
+		this.setState((prev) => {
+			const searchOpen = !prev.searchOpen;
+
+			if (!searchOpen) {
+				this.searchAddon?.clearDecorations?.();
+				this.activateTerminalInput(false);
+			}
+
+			return {searchOpen};
+		}, () => {
+			if (this.state.searchOpen) {
+				window.requestAnimationFrame(() => this.searchInputRef?.focus());
+			}
+		});
+	};
+
+	setSearchInputRef = (node) => {
+		this.searchInputRef = node;
+	};
+
+	handleSearchInput = (event) => {
+		this.searchAddon?.findNext(event.target.value, {incremental: true});
+	};
+
+	handleSearchKeyDown = (event) => {
+		if (event.key === 'Enter') {
+			event.preventDefault();
+
+			if (event.shiftKey) {
+				this.searchAddon?.findPrevious(this.searchInputRef?.value || '');
+			} else {
+				this.searchAddon?.findNext(this.searchInputRef?.value || '');
+			}
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			this.toggleSearch();
+		}
+	};
+
+	handleSearchNext = () => {
+		this.searchAddon?.findNext(this.searchInputRef?.value || '');
+	};
+
+	handleSearchPrevious = () => {
+		this.searchAddon?.findPrevious(this.searchInputRef?.value || '');
+	};
+
 	componentWillUnmount () {
 		if (this.fitFrame) {
 			window.cancelAnimationFrame(this.fitFrame);
@@ -437,6 +557,12 @@ class TerminalView extends Component {
 		this.unbindKeyboardVisibility?.();
 		this.unregisterCleanup?.();
 		this.unregisterCleanup = null;
+
+		if (this.statusTimer) {
+			window.clearTimeout(this.statusTimer);
+			this.statusTimer = null;
+		}
+
 		resumeSpotlightForKeyboard();
 		this.resizeObserver?.disconnect();
 		this.session?.close();
@@ -444,7 +570,7 @@ class TerminalView extends Component {
 	}
 
 	render () {
-		const {initError} = this.state;
+		const {initError, searchOpen, status} = this.state;
 		const {active = true, tabId = '1'} = this.props;
 		const showKeyboardButton =
 			active &&
@@ -462,11 +588,43 @@ class TerminalView extends Component {
 
 		return (
 			<div className={css.wrapper}>
-				{showKeyboardButton ? (
+				{active ? (
 					<div className={css.toolbar}>
-						<Button onClick={this.handleShowKeyboard} size="small">
-							Show Keyboard
+						{showKeyboardButton ? (
+							<Button onClick={this.handleShowKeyboard} size="small">
+								Show Keyboard
+							</Button>
+						) : null}
+						<Button onClick={this.handleCopy} size="small">
+							Copy
 						</Button>
+						<Button onClick={this.handlePaste} size="small">
+							Paste
+						</Button>
+						<Button onClick={this.toggleSearch} size="small">
+							{searchOpen ? 'Close Search' : 'Search'}
+						</Button>
+						{status ? <span className={css.status}>{status}</span> : null}
+					</div>
+				) : null}
+				{active && searchOpen ? (
+					<div className={css.searchBar}>
+						<input
+							aria-label="Search terminal output"
+							autoCapitalize="off"
+							autoComplete="off"
+							autoCorrect="off"
+							className={css.searchInput}
+							onChange={this.handleSearchInput}
+							onKeyDown={this.handleSearchKeyDown}
+							placeholder="Find in scrollback..."
+							ref={this.setSearchInputRef}
+							spellCheck={false}
+							type="text"
+						/>
+						<Button onClick={this.handleSearchPrevious} size="small">Prev</Button>
+						<Button onClick={this.handleSearchNext} size="small">Next</Button>
+						<Button onClick={this.toggleSearch} size="small">Close</Button>
 					</div>
 				) : null}
 				<TerminalFocusRegion

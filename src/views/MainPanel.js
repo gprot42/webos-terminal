@@ -3,6 +3,7 @@ import Button from '@enact/limestone/Button';
 import {Panel, Header} from '@enact/limestone/Panels';
 
 import TerminalView from '../components/Terminal/TerminalView';
+import {loadTabState, saveTabState, saveTabStateNow} from '../utils/tabPersistence';
 
 import css from './MainPanel.module.less';
 
@@ -10,12 +11,13 @@ const MAX_TABS = 8;
 
 let nextTabId = 1;
 
-function createTab () {
+function createTab (cwd) {
 	const id = String(nextTabId++);
 
 	return {
 		id,
-		title: `Tab ${id}`
+		title: `Tab ${id}`,
+		cwd
 	};
 }
 
@@ -23,12 +25,44 @@ class MainPanel extends Component {
 	constructor (props) {
 		super(props);
 
-		const firstTab = createTab();
+		const persisted = loadTabState();
 
-		this.state = {
-			tabs: [firstTab],
-			activeTabId: firstTab.id
+		if (persisted?.tabs?.length) {
+			const tabs = persisted.tabs.map((tab) => createTab(tab.cwd));
+			const activeIndex = persisted.tabs.findIndex((tab) => tab.id === persisted.activeTabId);
+			const activeTabId = tabs[activeIndex === -1 ? 0 : activeIndex].id;
+
+			this.state = {tabs, activeTabId};
+		} else {
+			const firstTab = createTab();
+
+			this.state = {
+				tabs: [firstTab],
+				activeTabId: firstTab.id
+			};
+		}
+	}
+
+	componentDidUpdate () {
+		this.persistTabs();
+	}
+
+	componentWillUnmount () {
+		this.persistTabs(true);
+	}
+
+	persistTabs (immediate = false) {
+		const {tabs, activeTabId} = this.state;
+		const state = {
+			tabs: tabs.map((tab) => ({id: tab.id, cwd: tab.cwd})),
+			activeTabId
 		};
+
+		if (immediate) {
+			saveTabStateNow(state);
+		} else {
+			saveTabState(state);
+		}
 	}
 
 	selectTab = (tabId) => {
@@ -73,6 +107,14 @@ class MainPanel extends Component {
 			}
 
 			return {tabs, activeTabId};
+		});
+	};
+
+	handleCwdChange = (tabId, cwd) => {
+		this.setState((prev) => {
+			const tabs = prev.tabs.map((tab) => (tab.id === tabId ? {...tab, cwd} : tab));
+
+			return {tabs};
 		});
 	};
 
@@ -155,6 +197,8 @@ class MainPanel extends Component {
 							>
 								<TerminalView
 									active={activeTabId === tab.id}
+									initialCwd={tab.cwd}
+									onCwdChange={(cwd) => this.handleCwdChange(tab.id, cwd)}
 									settings={settings}
 									tabId={tab.id}
 								/>
