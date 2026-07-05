@@ -71,6 +71,8 @@ To run the terminal as **root** (not the default `prisoner` user), see **[Runnin
 
 This is an **early MVP**. It works for basic interactive shell use on rooted devices. Some advanced terminal features — full-screen editors, complex TUI apps — may not behave perfectly yet.
 
+**Why run as root?** By default the shell runs jailed as the `prisoner` user, which blocks access to `/dev/ptmx` — the device needed to allocate a real pseudo-terminal (PTY). No PTY means no job control and no full-screen apps (`vim`, `htop`, `less`, `tmux`); the app emulates basic line history client-side to compensate. Running the service as root removes the jail's filesystem restrictions and is a prerequisite for real PTY support, though it isn't a guarantee — see **[Running as root](README.install.md#running-as-root)** for the full explanation and current limitations.
+
 Feedback and contributions are welcome.
 
 ## License

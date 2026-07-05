@@ -127,6 +127,18 @@ ls /
 
 By default the terminal runs as the `prisoner` user inside the homebrew jail (`$` prompt). To run it as **root** (`#` prompt), elevate the shell service from SSH on the same network.
 
+### Why run as root?
+
+The homebrew jail the `prisoner` user runs in blocks more than just a handful of file paths — it also denies access to `/dev/ptmx`, the device Linux uses to allocate a **pseudo-terminal (PTY)**. Without a PTY, the shell has no real TTY attached, which means:
+
+- No job control (`Ctrl+Z`, `bg`/`fg`, backgrounding jobs)
+- No line editing inside the shell itself (the app emulates basic history/backspace client-side instead)
+- Full-screen terminal apps that need raw-mode input — `vim`, `htop`, `less`, `man`, `tmux` — either fail to start or render garbled
+
+Elevating the service moves it **outside** the jail, which removes most filesystem restrictions and is a prerequisite for PTY allocation to even be possible. That said, elevation is necessary but **not sufficient** for a working PTY on every TV: on the devices we've tested so far, the elevated service can still fail to bridge a PTY (it hangs with no output), so the app automatically detects that and falls back to the piped shell described above. In other words — running as root gives you full filesystem access and is the right foundation for PTY support, but full-screen TUI apps may still not work depending on your TV's firmware. A native PTY bridge (a small helper binary using `forkpty()`) is the real long-term fix and is on the roadmap.
+
+**Bottom line:** run as root if you want unrestricted filesystem/command access (most day-to-day commands work fine either way). Don't expect `vim`/`htop`/`tmux` to work reliably yet, even as root — that requires the native PTY bridge.
+
 ### Elevate the service
 
 SSH in as `root`, then run these commands **in order**. Let `elevate-service` finish on its own — do not interrupt it with Ctrl+C; it may pause briefly while Luna rescans services.
