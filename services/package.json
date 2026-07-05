@@ -1,6 +1,6 @@
 {
 	"name": "org.webosbrew.terminal.service",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"main": "shell_service.js",
 	"dependencies": {
 		"webos-service": "^1.2.1"
