@@ -87,7 +87,7 @@ This produces a `dist/` folder with the app and shell service.
 ```bash
 cd dist
 ares-package .
-ares-install org.webosbrew.terminal_0.1.0_all.ipk
+ares-install com.github.gprot42.webosterminal_0.1.0_all.ipk
 ```
 
 Replace the version number in the filename if yours differs.
@@ -95,7 +95,7 @@ Replace the version number in the filename if yours differs.
 #### 5. Launch the app
 
 ```bash
-ares-launch org.webosbrew.terminal
+ares-launch com.github.gprot42.webosterminal
 ```
 
 Or find **webOS Terminal** in your TV’s app launcher.
@@ -167,11 +167,11 @@ SSH in as `root`, then run these commands **in order**. Let `elevate-service` fi
 ssh root@YOUR_TV_IP
 
 # 1. Patch Luna config so the terminal service runs outside the homebrew jail
-/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service com.github.gprot42.webosterminal.service
 
 # 2. Reload service definitions and stop any stale jailed instance
 /usr/sbin/ls-control scan-services
-pkill -f org.webosbrew.terminal.service
+pkill -f com.github.gprot42.webosterminal.service
 ```
 
 Then launch **webOS Terminal** (close it first if it was already open).
@@ -190,8 +190,8 @@ You should see `root` and `uid=0(root)`.
 To verify the elevation patch on disk:
 
 ```bash
-grep '^Exec=' /var/luna-service2-dev/services.d/org.webosbrew.terminal.service.service 2>/dev/null \
-  || grep '^Exec=' /var/luna-service2/services.d/org.webosbrew.terminal.service.service
+grep '^Exec=' /var/luna-service2-dev/services.d/com.github.gprot42.webosterminal.service.service 2>/dev/null \
+  || grep '^Exec=' /var/luna-service2/services.d/com.github.gprot42.webosterminal.service.service
 ```
 
 `Exec=` should point to Homebrew Channel’s `run-js-service`, not `/usr/bin/run-js-service`.
@@ -214,9 +214,9 @@ The one-time `elevate-service` command persists across normal reboots. If you wa
 mkdir -p /var/lib/webosbrew/init.d
 cat << 'EOF' > /var/lib/webosbrew/init.d/50-webos-terminal-elevate
 #!/bin/sh
-/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service com.github.gprot42.webosterminal.service
 /usr/sbin/ls-control scan-services
-pkill -f org.webosbrew.terminal.service || true
+pkill -f com.github.gprot42.webosterminal.service || true
 EOF
 chmod +x /var/lib/webosbrew/init.d/50-webos-terminal-elevate
 ```
@@ -239,7 +239,7 @@ Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
 - If you already ran `elevate-service` but still see `prisoner`, reload services and kill the stale instance:
   ```bash
   /usr/sbin/ls-control scan-services
-  pkill -f org.webosbrew.terminal.service
+  pkill -f com.github.gprot42.webosterminal.service
   ```
   Then relaunch webOS Terminal.
 - Open Homebrew Channel once after boot so elevation and root services stay active.
@@ -264,7 +264,7 @@ Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
 ### Reinstalling or updating
 
 ```bash
-ares-install org.webosbrew.terminal_0.1.0_all.ipk
+ares-install com.github.gprot42.webosterminal_0.1.0_all.ipk
 ```
 
 Installing again over an existing copy is safe. Re-run `./install2tvfrommacos.sh` or `ares-install` with the new IPK to update, then re-run the **[Elevate the service](#elevate-the-service)** steps — updates can reset the service launcher.
@@ -274,6 +274,12 @@ Installing again over an existing copy is safe. Re-run `./install2tvfrommacos.sh
 ## Uninstalling
 
 From a computer:
+
+```bash
+ares-install --remove com.github.gprot42.webosterminal
+```
+
+If you previously installed the app under the old package ID (`org.webosbrew.terminal`), remove that copy too:
 
 ```bash
 ares-install --remove org.webosbrew.terminal

@@ -1,6 +1,6 @@
 import LS2Request from '@enact/webos/LS2Request';
 
-const TERMINAL_SERVICE = 'luna://org.webosbrew.terminal.service';
+const TERMINAL_SERVICE = 'luna://com.github.gprot42.webosterminal.service';
 const HB_SPAWN_SERVICE = 'luna://org.webosbrew.hbchannel.service';
 
 const SHELL_NOISE = [

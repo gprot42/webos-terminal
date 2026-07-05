@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'org.webosbrew.terminal.settings';
+const STORAGE_KEY = 'com.github.gprot42.webosterminal.settings';
 
 export const KEYBOARD_MODES = {
 	AUTO: 'auto',

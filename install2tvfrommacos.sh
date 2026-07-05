@@ -29,7 +29,7 @@ ROOT_PASSWORD="${ROOT_PASSWORD:-alpine}"
 LAUNCH="${LAUNCH:-1}"
 SETUP_DEVICE="${SETUP_DEVICE:-1}"
 
-APP_ID="org.webosbrew.terminal"
+APP_ID="com.github.gprot42.webosterminal"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SSH_KEY_PATH="$HOME/.ssh/$SSH_KEY"
 NODE_MAJOR="${NODE_MAJOR:-20}"
