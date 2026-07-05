@@ -15,7 +15,7 @@
 		"test": "enact test",
 		"test-watch": "enact test --watch",
 		"build": "npm run pack-p && npm run build-service",
-		"build-service": "mkdir -p dist/services && cp services/shell_service.js services/services.json services/package.json dist/services/"
+		"build-service": "mkdir -p dist/services/bin && cp services/shell_service.js services/services.json services/package.json dist/services/ && cp services/bin/ptybridge-* dist/services/bin/ 2>/dev/null || true"
 	},
 	"license": "MIT",
 	"private": true,

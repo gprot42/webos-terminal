@@ -34,12 +34,43 @@ function filterShellNoise (text) {
 
 // The service jail normally has no PTY devices (/dev/ptmx), so `/bin/sh -i`
 // runs piped -- no job control, no readline in the shell itself (we emulate
-// line editing client-side instead). If the service has been elevated
-// (see README: elevate-service) and a `script` binary is present, it may be
-// able to allocate a real pseudo-terminal via openpty(), which restores job
-// control and lets full-screen TUIs (vim, htop, etc.) work. Try that first,
-// and fall back to the piped shell immediately if `script` is missing or
-// fails to spawn.
+// line editing client-side instead). Three ways to get a real PTY are tried,
+// in order of preference, each falling back to the next on failure:
+//
+//   1. ptybridge: our own native helper (native/ptybridge/ptybridge.c) that
+//      allocates a pty and explicitly makes itself the controlling terminal
+//      of the shell via setsid()+TIOCSCTTY -- so it doesn't need the
+//      *service* to have a controlling terminal at all (it has none).
+//   2. `script`: util-linux's pty wrapper. Works on some systems, but on
+//      this TV it hangs silently because it expects to inherit a
+//      controlling terminal from its caller, which the headless service
+//      doesn't have.
+//   3. A plain piped shell (no pty at all) -- always works, but no job
+//      control and weak/no support for full-screen TUIs.
+//
+// Both PTY attempts (1 and 2) get a short window to prove they're actually
+// producing output before being trusted; if nothing arrives, they're killed
+// and the next option is tried.
+var PTY_BRIDGE_ARCH = {arm: 'armv7', arm64: 'aarch64', x64: 'x86_64'};
+var HANG_DETECT_MS = 800;
+
+function findPtyBridgeBinary () {
+	var arch = PTY_BRIDGE_ARCH[process.arch];
+
+	if (!arch) {
+		return null;
+	}
+
+	var candidate = __dirname + '/bin/ptybridge-' + arch;
+
+	try {
+		fs.accessSync(candidate, fs.constants.X_OK);
+		return candidate;
+	} catch (err) {
+		return null;
+	}
+}
+
 var SCRIPT_BIN_CANDIDATES = ['/usr/bin/script', '/bin/script'];
 
 function findScriptBinary () {
@@ -61,26 +92,14 @@ function spawnPipedShell (env, cwd) {
 	return child_process.spawn('/bin/sh', ['-i'], {env: env, cwd: cwd});
 }
 
-// Spawns the interactive shell, preferring a real PTY via `script` when
-// available. `onReady(shell, usingPty, pendingStdout)` is called once a
-// shell process is running (falling back if the PTY attempt errors, or is
-// silently stuck -- see below). `pendingStdout` is an array of Buffers
-// already emitted by the shell before the caller could attach its own
-// listeners, and must be replayed through the normal output path.
-function spawnInteractiveShell (env, cwd, onReady) {
-	var scriptBin = findScriptBinary();
-
-	if (!scriptBin) {
-		onReady(spawnPipedShell(env, cwd), false, []);
-		return;
-	}
-
-	// util-linux `script -qc "<cmd>" /dev/null` allocates a pty and runs
-	// <cmd> attached to its slave side, discarding the typescript log.
-	var ptyShell = child_process.spawn(scriptBin, ['-qc', '/bin/sh -i', '/dev/null'], {
-		env: env,
-		cwd: cwd
-	});
+// Spawns `bin` with `args`/`spawnOpts` and gives it HANG_DETECT_MS to prove
+// it's actually producing output on stdout. Calls
+// `onSettled(proc, usingPty, pendingStdout)` exactly once: either with the
+// still-running process once output arrives (pty confirmed working), or
+// with `usingPty: false` if it errored or stayed silent (and has been
+// killed) so the caller can fall back to the next option.
+function spawnWithHangDetection (bin, args, spawnOpts, onSettled) {
+	var proc = child_process.spawn(bin, args, spawnOpts);
 	var settled = false;
 	var pending = [];
 
@@ -88,28 +107,22 @@ function spawnInteractiveShell (env, cwd, onReady) {
 		pending.push(chunk);
 	}
 
-	ptyShell.stdout.on('data', bufferChunk);
+	proc.stdout.on('data', bufferChunk);
 
 	function stopBuffering () {
-		ptyShell.stdout.removeListener('data', bufferChunk);
+		proc.stdout.removeListener('data', bufferChunk);
 	}
 
-	ptyShell.once('error', function () {
+	proc.once('error', function () {
 		if (settled) {
 			return;
 		}
 
 		settled = true;
 		stopBuffering();
-		onReady(spawnPipedShell(env, cwd), false, []);
+		onSettled(null, false, []);
 	});
 
-	// This TV's `script` binary appears to need a controlling terminal to
-	// bridge the pty; the service runs headless with none, so instead of
-	// erroring it just hangs producing no output at all. Give the PTY
-	// attempt a window to actually emit something; if nothing arrives,
-	// assume it's stuck, kill it, and fall back to the piped shell (which
-	// works fine without a tty).
 	setTimeout(function () {
 		if (settled) {
 			return;
@@ -119,12 +132,65 @@ function spawnInteractiveShell (env, cwd, onReady) {
 		stopBuffering();
 
 		if (pending.length) {
-			onReady(ptyShell, true, pending);
+			onSettled(proc, true, pending);
 		} else {
-			ptyShell.kill('SIGKILL');
-			onReady(spawnPipedShell(env, cwd), false, []);
+			proc.kill('SIGKILL');
+			onSettled(null, false, []);
 		}
-	}, 800);
+	}, HANG_DETECT_MS);
+}
+
+// Spawns the interactive shell, preferring a real PTY (ptybridge, then
+// `script`) and falling back to a piped shell. `onReady(shell, usingPty,
+// pendingStdout, resizeStream)` is called once a shell process is running.
+// `pendingStdout` is an array of Buffers already emitted by the shell before
+// the caller could attach its own listeners, and must be replayed through
+// the normal output path. `resizeStream` is the writable side of ptybridge's
+// fd-3 resize channel, or null when not using ptybridge.
+function spawnInteractiveShell (env, cwd, cols, rows, onReady) {
+	var bridgeBin = findPtyBridgeBinary();
+
+	function tryScriptThenPiped () {
+		var scriptBin = findScriptBinary();
+
+		if (!scriptBin) {
+			onReady(spawnPipedShell(env, cwd), false, [], null);
+			return;
+		}
+
+		// util-linux `script -qc "<cmd>" /dev/null` allocates a pty and runs
+		// <cmd> attached to its slave side, discarding the typescript log.
+		spawnWithHangDetection(
+			scriptBin,
+			['-qc', '/bin/sh -i', '/dev/null'],
+			{env: env, cwd: cwd},
+			function (proc, usingPty, pending) {
+				if (usingPty) {
+					onReady(proc, true, pending, null);
+				} else {
+					onReady(spawnPipedShell(env, cwd), false, [], null);
+				}
+			}
+		);
+	}
+
+	if (!bridgeBin) {
+		tryScriptThenPiped();
+		return;
+	}
+
+	spawnWithHangDetection(
+		bridgeBin,
+		[String(cols), String(rows), '--', '/bin/sh', '-i'],
+		{env: env, cwd: cwd, stdio: ['pipe', 'pipe', 'pipe', 'pipe']},
+		function (proc, usingPty, pending) {
+			if (usingPty) {
+				onReady(proc, true, pending, proc.stdio[3]);
+			} else {
+				tryScriptThenPiped();
+			}
+		}
+	);
 }
 
 function resolveCwd (requestedCwd) {
@@ -163,16 +229,17 @@ service.register('open', function (message) {
 	env.COLUMNS = String(cols);
 	env.LINES = String(rows);
 
-	spawnInteractiveShell(env, cwd, function (shell, usingPty, pendingStdout) {
-		startSession(shell, usingPty, pendingStdout);
+	spawnInteractiveShell(env, cwd, cols, rows, function (shell, usingPty, pendingStdout, resizeStream) {
+		startSession(shell, usingPty, pendingStdout, resizeStream);
 	});
 
-	function startSession (shell, usingPty, pendingStdout) {
+	function startSession (shell, usingPty, pendingStdout, resizeStream) {
 	sessions[sessionId] = {
 		shell: shell,
 		cols: cols,
 		rows: rows,
-		usingPty: usingPty
+		usingPty: usingPty,
+		resizeStream: resizeStream || null
 	};
 
 	message.respond({
@@ -317,12 +384,44 @@ service.register('resize', function (message) {
 
 	session.cols = payload.cols || session.cols;
 	session.rows = payload.rows || session.rows;
+
+	if (session.resizeStream) {
+		try {
+			session.resizeStream.write(session.cols + ',' + session.rows + '\n');
+		} catch (err) {
+			// resize channel gone (process exiting) -- ignore
+		}
+	}
+
 	message.respond({returnValue: true});
 });
 
 // Best-effort current-working-directory lookup for lightweight tab
 // persistence. /proc may not be mounted/readable in every jail, so failures
 // are expected and just mean the client won't remember that tab's directory.
+//
+// When using ptybridge, `session.shell.pid` is the *bridge* process, not the
+// shell itself -- the bridge never chdirs, so its cwd would never reflect
+// the user's `cd` commands. Resolve to the actual shell (the bridge's first
+// child, which keeps the same pid across its execve of /bin/sh) via the
+// /proc/<pid>/task/<pid>/children file (Linux 3.5+, no ptrace needed). For
+// non-bridge sessions this file is normally empty, so it harmlessly falls
+// back to the shell's own pid.
+function resolveShellPid (pid) {
+	try {
+		var childrenRaw = fs.readFileSync('/proc/' + pid + '/task/' + pid + '/children', 'utf8').trim();
+
+		if (childrenRaw) {
+			return childrenRaw.split(/\s+/)[0];
+		}
+	} catch (err) {
+		// no children file (older kernel, or process has no children) --
+		// assume `pid` is already the shell itself
+	}
+
+	return pid;
+}
+
 service.register('getCwd', function (message) {
 	var payload = message.payload || {};
 	var session = getSession(payload.sessionId);
@@ -333,7 +432,8 @@ service.register('getCwd', function (message) {
 	}
 
 	try {
-		var cwd = fs.readlinkSync('/proc/' + session.shell.pid + '/cwd');
+		var shellPid = resolveShellPid(session.shell.pid);
+		var cwd = fs.readlinkSync('/proc/' + shellPid + '/cwd');
 		message.respond({returnValue: true, cwd: cwd});
 	} catch (err) {
 		message.respond({returnValue: false, errorText: err.message});
