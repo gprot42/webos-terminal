@@ -50,6 +50,8 @@ class TerminalView extends Component {
 		this.state = {
 			initError: null,
 			searchOpen: false,
+			keysOpen: false,
+			ctrlActive: false,
 			status: null
 		};
 	}
@@ -291,6 +293,18 @@ class TerminalView extends Component {
 			return;
 		}
 
+		if (this.state.ctrlActive && delta.length === 1 && /[a-zA-Z]/.test(delta)) {
+			this.setState({ctrlActive: false});
+			this.sendCtrlChar(delta);
+
+			if (this.proxyInputRef) {
+				this.proxyInputRef.value = '';
+			}
+
+			this.proxyInputLength = 0;
+			return;
+		}
+
 		this.sendToTerminal(delta);
 	}
 
@@ -494,6 +508,36 @@ class TerminalView extends Component {
 		this.session?.write(text);
 	};
 
+	toggleKeysBar = () => {
+		this.setState((prev) => ({keysOpen: !prev.keysOpen, ctrlActive: false}));
+	};
+
+	toggleCtrlModifier = () => {
+		this.setState((prev) => ({ctrlActive: !prev.ctrlActive}));
+	};
+
+	sendKeySequence = (sequence) => {
+		this.session?.write(sequence);
+		this.term?.focus();
+	};
+
+	sendCtrlChar = (letter) => {
+		const code = letter.toUpperCase().charCodeAt(0) - 64;
+
+		this.sendKeySequence(String.fromCharCode(code));
+	};
+
+	handleEscKey = () => this.sendKeySequence('\x1b');
+	handleTabKey = () => this.sendKeySequence('\t');
+	handleArrowUp = () => this.sendKeySequence('\x1b[A');
+	handleArrowDown = () => this.sendKeySequence('\x1b[B');
+	handleArrowRight = () => this.sendKeySequence('\x1b[C');
+	handleArrowLeft = () => this.sendKeySequence('\x1b[D');
+	handleCtrlC = () => this.sendCtrlChar('c');
+	handleCtrlD = () => this.sendCtrlChar('d');
+	handleCtrlZ = () => this.sendCtrlChar('z');
+	handleCtrlL = () => this.sendCtrlChar('l');
+
 	toggleSearch = () => {
 		this.setState((prev) => {
 			const searchOpen = !prev.searchOpen;
@@ -570,7 +614,7 @@ class TerminalView extends Component {
 	}
 
 	render () {
-		const {initError, searchOpen, status} = this.state;
+		const {initError, searchOpen, keysOpen, ctrlActive, status} = this.state;
 		const {active = true, tabId = '1'} = this.props;
 		const showKeyboardButton =
 			active &&
@@ -604,7 +648,31 @@ class TerminalView extends Component {
 						<Button onClick={this.toggleSearch} size="small">
 							{searchOpen ? 'Close Search' : 'Search'}
 						</Button>
+						<Button onClick={this.toggleKeysBar} size="small">
+							{keysOpen ? 'Close Keys' : 'Keys'}
+						</Button>
 						{status ? <span className={css.status}>{status}</span> : null}
+					</div>
+				) : null}
+				{active && keysOpen ? (
+					<div className={css.keysBar}>
+						<Button
+							onClick={this.toggleCtrlModifier}
+							selected={ctrlActive}
+							size="small"
+						>
+							Ctrl
+						</Button>
+						<Button onClick={this.handleEscKey} size="small">Esc</Button>
+						<Button onClick={this.handleTabKey} size="small">Tab</Button>
+						<Button onClick={this.handleArrowLeft} size="small">&#8592;</Button>
+						<Button onClick={this.handleArrowUp} size="small">&#8593;</Button>
+						<Button onClick={this.handleArrowDown} size="small">&#8595;</Button>
+						<Button onClick={this.handleArrowRight} size="small">&#8594;</Button>
+						<Button onClick={this.handleCtrlC} size="small">Ctrl+C</Button>
+						<Button onClick={this.handleCtrlD} size="small">Ctrl+D</Button>
+						<Button onClick={this.handleCtrlZ} size="small">Ctrl+Z</Button>
+						<Button onClick={this.handleCtrlL} size="small">Ctrl+L</Button>
 					</div>
 				) : null}
 				{active && searchOpen ? (

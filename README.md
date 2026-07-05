@@ -69,9 +69,23 @@ To run the terminal as **root** (not the default `prisoner` user), see **[Runnin
 
 ## Status
 
-This is an **early MVP**. It works for basic interactive shell use on rooted devices. Some advanced terminal features — full-screen editors, complex TUI apps — may not behave perfectly yet.
+This is an **early MVP**. It works for basic interactive shell use on rooted devices.
 
-**Why run as root?** By default the shell runs jailed as the `prisoner` user, which blocks access to `/dev/ptmx` — the device needed to allocate a real pseudo-terminal (PTY). No PTY means no job control and no full-screen apps (`vim`, `htop`, `less`, `tmux`); the app emulates basic line history client-side to compensate. Running the service as root removes the jail's filesystem restrictions and is a prerequisite for real PTY support, though it isn't a guarantee — see **[Running as root](README.install.md#running-as-root)** for the full explanation and current limitations.
+### PTY support
+
+A real terminal session (job control, `vim`, `htop`, `less`, `tmux`) needs a pseudo-terminal (PTY), which the default jailed `prisoner` user can't allocate (`/dev/ptmx` is blocked). To fix this, the app ships **`ptybridge`** — a small native helper (`native/ptybridge/ptybridge.c`) that allocates and bridges a real PTY itself, independent of whatever shell it inherited from.
+
+The service picks the right prebuilt binary for your TV's CPU automatically at runtime (matched against `process.arch`), and it's compiled statically so it has no runtime library dependencies:
+
+| Architecture | Binary | Covers |
+|---|---|---|
+| ARMv7 (hard-float) | `services/bin/ptybridge-armv7` | Most LG webOS TVs |
+| ARM64 | `services/bin/ptybridge-aarch64` | Newer TVs/SoCs |
+| x86_64 | `services/bin/ptybridge-x86_64` | webOS OSE emulator, x86-based firmware |
+
+If `ptybridge` isn't available or fails on a given TV's firmware, the app falls back to `script`-based PTY allocation, and finally to a plain piped shell (no PTY, client-side line history only) — so the terminal keeps working either way, just with fewer capabilities in the fallback tiers.
+
+Running the shell service as **root** removes the jail's filesystem restrictions, which `ptybridge` needs to open `/dev/ptmx` — see **[Running as root](README.install.md#running-as-root)** for setup steps.
 
 Feedback and contributions are welcome.
 

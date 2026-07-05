@@ -135,9 +135,27 @@ The homebrew jail the `prisoner` user runs in blocks more than just a handful of
 - No line editing inside the shell itself (the app emulates basic history/backspace client-side instead)
 - Full-screen terminal apps that need raw-mode input — `vim`, `htop`, `less`, `man`, `tmux` — either fail to start or render garbled
 
-Elevating the service moves it **outside** the jail, which removes most filesystem restrictions and is a prerequisite for PTY allocation to even be possible. That said, elevation is necessary but **not sufficient** for a working PTY on every TV: on the devices we've tested so far, the elevated service can still fail to bridge a PTY (it hangs with no output), so the app automatically detects that and falls back to the piped shell described above. In other words — running as root gives you full filesystem access and is the right foundation for PTY support, but full-screen TUI apps may still not work depending on your TV's firmware. A native PTY bridge (a small helper binary using `forkpty()`) is the real long-term fix and is on the roadmap.
+Elevating the service moves it **outside** the jail, which removes most filesystem restrictions and gives it access to `/dev/ptmx` — the prerequisite for a working PTY.
 
-**Bottom line:** run as root if you want unrestricted filesystem/command access (most day-to-day commands work fine either way). Don't expect `vim`/`htop`/`tmux` to work reliably yet, even as root — that requires the native PTY bridge.
+### How PTY allocation actually works
+
+The service tries three mechanisms, in order, and automatically falls back if one doesn't work:
+
+1. **`ptybridge`** (preferred) — a small native helper we ship at `native/ptybridge/ptybridge.c` / `services/bin/ptybridge-*`. It calls `posix_openpt`/`grantpt`/`unlockpt`, forks, and has the child call `setsid()` + `ioctl(TIOCSCTTY)` to explicitly acquire its own controlling terminal — rather than relying on inheriting one from `script` or the service process, which is what caused PTY allocation to hang on every TV we tested previously. This is what actually unlocks job control and full-screen TUIs.
+2. **`script -q -c "/bin/sh -i" /dev/null`** — a generic PTY wrapper, tried if `ptybridge` is missing or fails.
+3. **Piped shell** (no PTY) — `/bin/sh -i` with plain pipes, the final fallback. Works for ordinary commands but no job control or full-screen apps; the app emulates basic line history client-side to compensate.
+
+`ptybridge` is compiled statically (no runtime library dependencies) for three CPU architectures, and the service auto-selects the right one for your TV at runtime:
+
+| Architecture | Binary | Covers |
+|---|---|---|
+| ARMv7 (hard-float) | `services/bin/ptybridge-armv7` | Most LG webOS TVs |
+| ARM64 | `services/bin/ptybridge-aarch64` | Newer TVs/SoCs |
+| x86_64 | `services/bin/ptybridge-x86_64` | webOS OSE emulator, x86-based firmware |
+
+All three require the service to run as **root** — `ptybridge` still needs `/dev/ptmx`, which the `prisoner` jail blocks regardless of which mechanism is used.
+
+**Bottom line:** run as root to get a real PTY via `ptybridge` — job control and full-screen apps (`vim`, `htop`, `tmux`) work once elevated, on any of the three supported architectures. If `ptybridge` ever fails on a specific TV's kernel/firmware, the app transparently falls back to `script`, then to the piped shell, so basic command-line use keeps working either way.
 
 ### Elevate the service
 
