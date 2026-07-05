@@ -102,9 +102,11 @@ Or find **webOS Terminal** in your TV’s app launcher.
 
 ---
 
-## Homebrew Channel app store (not yet available)
+## Homebrew Channel app store
 
-webOS Terminal is not published to the Homebrew Channel store yet. When it is, you will be able to install it from the TV without a computer. Until then, use the sideload steps above.
+webOS Terminal is available in the [webOS Homebrew app repository](https://repo.webosbrew.org/). On a rooted TV with Homebrew Channel installed, open the store, search for **webOS Terminal**, and install it directly — no computer required.
+
+If the store listing is not yet visible on your TV, refresh the app catalog in Homebrew Channel settings, or use the sideload steps above.
 
 ---
 
