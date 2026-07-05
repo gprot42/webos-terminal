@@ -111,7 +111,7 @@ webOS Terminal is not published to the Homebrew Channel store yet. When it is, y
 ## First launch
 
 1. Open **webOS Terminal**.
-2. You should see a terminal prompt (for example, `$` or `#` on a rooted device).
+2. You should see a terminal prompt. By default this is `$` as the `prisoner` user (see **[Running as root](#running-as-root)** below for a `#` root prompt).
 3. Type a simple command to confirm it works, such as:
 
 ```bash
@@ -125,26 +125,66 @@ ls /
 
 ## Running as root
 
-By default the terminal runs as the `prisoner` user inside the homebrew jail. To run it as root, elevate the shell service once from a computer on the same network:
+By default the terminal runs as the `prisoner` user inside the homebrew jail (`$` prompt). To run it as **root** (`#` prompt), elevate the shell service from SSH on the same network.
+
+### Elevate the service
+
+SSH in as `root`, then run these commands **in order**. Let `elevate-service` finish on its own — do not interrupt it with Ctrl+C; it may pause briefly while Luna rescans services.
 
 ```bash
 ssh root@YOUR_TV_IP
+
+# 1. Patch Luna config so the terminal service runs outside the homebrew jail
 /media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+
+# 2. Reload service definitions and stop any stale jailed instance
+/usr/sbin/ls-control scan-services
+pkill -f org.webosbrew.terminal.service
 ```
 
-Restart webOS Terminal (or reboot the TV). Confirm with `id` or `whoami` — you should see `uid=0(root)`.
+Then launch **webOS Terminal** (close it first if it was already open).
 
-Open Homebrew Channel once after each boot so root services stay active.
+### Confirm it worked
+
+Inside the terminal app (not your SSH session), run:
+
+```bash
+whoami
+id
+```
+
+You should see `root` and `uid=0(root)`.
+
+To verify the elevation patch on disk:
+
+```bash
+grep '^Exec=' /var/luna-service2-dev/services.d/org.webosbrew.terminal.service.service 2>/dev/null \
+  || grep '^Exec=' /var/luna-service2/services.d/org.webosbrew.terminal.service.service
+```
+
+`Exec=` should point to Homebrew Channel’s `run-js-service`, not `/usr/bin/run-js-service`.
+
+### After reboot
+
+Elevation persists across normal reboots. Open **Homebrew Channel once** after each boot so root services stay active, then launch webOS Terminal.
+
+If the app is back to `prisoner`, re-run the `ls-control` and `pkill` commands above and relaunch the app.
+
+### After reinstall or update
+
+Installing a new IPK can reset the service launcher. Re-run the full **[Elevate the service](#elevate-the-service)** steps above.
 
 ### Auto-elevate on every boot
 
-The one-time `elevate-service` command above persists across normal reboots. If you want it re-applied automatically (e.g. after app updates), add a startup hook:
+The one-time `elevate-service` command persists across normal reboots. If you want it re-applied automatically (e.g. after app updates), add a startup hook:
 
 ```bash
 mkdir -p /var/lib/webosbrew/init.d
 cat << 'EOF' > /var/lib/webosbrew/init.d/50-webos-terminal-elevate
 #!/bin/sh
-exec /media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service org.webosbrew.terminal.service
+/usr/sbin/ls-control scan-services
+pkill -f org.webosbrew.terminal.service || true
 EOF
 chmod +x /var/lib/webosbrew/init.d/50-webos-terminal-elevate
 ```
@@ -164,8 +204,19 @@ Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
 ### Commands fail with “permission denied”
 
 - The app may be running as `prisoner` without root privileges. See **[Running as root](#running-as-root)** above.
+- If you already ran `elevate-service` but still see `prisoner`, reload services and kill the stale instance:
+  ```bash
+  /usr/sbin/ls-control scan-services
+  pkill -f org.webosbrew.terminal.service
+  ```
+  Then relaunch webOS Terminal.
 - Open Homebrew Channel once after boot so elevation and root services stay active.
 - Some system paths are protected even on rooted devices.
+
+### Yellow “Degraded mode: Homebrew Channel spawn service” banner
+
+- The app fell back to Homebrew Channel’s spawn API instead of the native terminal service.
+- Re-run the full elevation steps in **[Running as root](#running-as-root)** and confirm root status is **ok** in Homebrew Channel settings.
 
 ### I only see a browser-style preview when developing
 
@@ -184,7 +235,7 @@ Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
 ares-install org.webosbrew.terminal_0.1.0_all.ipk
 ```
 
-Installing again over an existing copy is safe. Re-run `./install2tvfrommacos.sh` or `ares-install` with the new IPK to update.
+Installing again over an existing copy is safe. Re-run `./install2tvfrommacos.sh` or `ares-install` with the new IPK to update, then re-run the **[Elevate the service](#elevate-the-service)** steps — updates can reset the service launcher.
 
 ---
 

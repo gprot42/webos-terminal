@@ -25,29 +25,19 @@
 	min-height: 0;
 }
 
-.columns {
+.row {
 	display: flex;
 	flex-direction: row;
+	align-items: flex-start;
 }
 
-.column {
+.field {
 	flex: 1;
 	min-width: 0;
 
 	& + & {
 		margin-left: 48px;
 	}
-}
-
-.rowGrid {
-	display: flex;
-	flex-wrap: wrap;
-}
-
-.rowOption {
-	width: 50%;
-	min-width: 0;
-	box-sizing: border-box;
 }
 
 .help {
