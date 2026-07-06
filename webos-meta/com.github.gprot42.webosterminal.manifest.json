@@ -1,15 +1,15 @@
 {
 	"id": "com.github.gprot42.webosterminal",
-	"version": "0.0.7",
+	"version": "0.0.8",
 	"type": "web",
 	"title": "webOS Terminal",
 	"appDescription": "Native terminal emulator for rooted LG webOS TVs — run shell commands on your TV without a laptop.",
 	"iconUri": "https://raw.githubusercontent.com/gprot42/webos-terminal/main/webos-meta/icon-large.png",
 	"sourceUrl": "https://github.com/gprot42/webos-terminal",
 	"rootRequired": true,
-	"ipkUrl": "com.github.gprot42.webosterminal_0.0.7_all.ipk",
+	"ipkUrl": "com.github.gprot42.webosterminal_0.0.8_all.ipk",
 	"ipkHash": {
-		"sha256": "58e4e9944240f698433be3fd9dd1a0edc8f1852232a74bab0545581ed1cdd773"
+		"sha256": "88c778efcc6414e2f9d6e3d31ac3ac487c3cc1a7c09b0b1da36e9c96fe357761"
 	},
-	"ipkSize": 8656862
+	"ipkSize": 8656830
 }
