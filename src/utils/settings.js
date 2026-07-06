@@ -16,6 +16,18 @@ export const DEFAULT_FONT_SIZE = 18;
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 48;
 
+export const DEFAULT_AUTOMATION_PASSWORD = 'webos';
+
+export function normalizeAutomationPassword (password) {
+	if (typeof password !== 'string') {
+		return DEFAULT_AUTOMATION_PASSWORD;
+	}
+
+	const trimmed = password.trim();
+
+	return trimmed || DEFAULT_AUTOMATION_PASSWORD;
+}
+
 export function clampTerminalRows (rows) {
 	const value = Number(rows);
 
@@ -39,7 +51,8 @@ export function clampFontSize (size) {
 export const defaultSettings = {
 	keyboardMode: KEYBOARD_MODES.AUTO,
 	terminalRows: DEFAULT_TERMINAL_ROWS,
-	fontSize: DEFAULT_FONT_SIZE
+	fontSize: DEFAULT_FONT_SIZE,
+	automationPassword: DEFAULT_AUTOMATION_PASSWORD
 };
 
 export function loadSettings () {
@@ -58,6 +71,7 @@ export function loadSettings () {
 
 		stored.terminalRows = clampTerminalRows(stored.terminalRows);
 		stored.fontSize = clampFontSize(stored.fontSize);
+		stored.automationPassword = normalizeAutomationPassword(stored.automationPassword);
 
 		return stored;
 	} catch (err) {

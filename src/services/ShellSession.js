@@ -71,10 +71,11 @@ function isWebOS () {
 }
 
 class ShellSession {
-	constructor ({cols = 80, rows = 24, initialCwd, onData, onExit, onError, onCwdChange, localEcho = true}) {
+	constructor ({cols = 80, rows = 24, initialCwd, automationPassword, onData, onExit, onError, onCwdChange, localEcho = true}) {
 		this.cols = cols;
 		this.rows = rows;
 		this.initialCwd = initialCwd;
+		this.automationPassword = automationPassword;
 		this.onData = onData;
 		this.onExit = onExit;
 		this.onError = onError;
@@ -113,6 +114,7 @@ class ShellSession {
 				if (response.sessionId && !this.sessionId) {
 					this.sessionId = response.sessionId;
 					this.mode = 'native';
+					this.registerUiSession(this.automationPassword);
 				}
 
 				if (response.type === 'stdout' || response.type === 'stderr') {
@@ -179,6 +181,26 @@ class ShellSession {
 			(reason ? `\x1b[33m${reason}\x1b[0m\r\n` : '') +
 			'Type commands and press Enter. Use "help" for available commands.\r\n\r\n$ '
 		);
+	}
+
+	setAutomationPassword (automationPassword) {
+		this.automationPassword = automationPassword;
+	}
+
+	registerUiSession (automationPassword = this.automationPassword) {
+		if (!this.sessionId || this.mode !== 'native') {
+			return;
+		}
+
+		const reg = new LS2Request();
+		reg.send({
+			service: TERMINAL_SERVICE,
+			method: 'registerUiSession',
+			parameters: {
+				sessionId: this.sessionId,
+				automationPassword
+			}
+		});
 	}
 
 	_nativeWrite (text) {

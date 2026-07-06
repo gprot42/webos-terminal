@@ -19,7 +19,12 @@ import {
 	resumeSpotlightForKeyboard,
 	syncProxyInputDelta
 } from '../../utils/keyboard';
-import {clampFontSize, clampTerminalRows, KEYBOARD_MODES} from '../../utils/settings';
+import {
+	clampFontSize,
+	clampTerminalRows,
+	KEYBOARD_MODES,
+	normalizeAutomationPassword
+} from '../../utils/settings';
 
 import css from './Terminal.module.less';
 import '@xterm/xterm/css/xterm.css';
@@ -58,6 +63,10 @@ class TerminalView extends Component {
 
 	componentDidMount () {
 		this.tryInitTerminal();
+
+		if (this.useWebOSKeyboard && this.props.automation) {
+			window.setTimeout(() => this.activateTerminalInput(false), 500);
+		}
 	}
 
 	componentDidUpdate (prevProps) {
@@ -73,8 +82,20 @@ class TerminalView extends Component {
 			this.applyFontSize();
 		}
 
+		if (prevProps.settings?.automationPassword !== this.props.settings?.automationPassword) {
+			const password = normalizeAutomationPassword(this.props.settings?.automationPassword);
+			this.session?.setAutomationPassword(password);
+
+			if (this.props.active) {
+				this.session?.registerUiSession(password);
+			}
+		}
+
 		if (prevProps.active !== this.props.active) {
 			if (this.props.active) {
+				this.session?.registerUiSession(
+					normalizeAutomationPassword(this.props.settings?.automationPassword)
+				);
 				this.scheduleFit();
 			} else {
 				this.stopProxyInputPoll();
@@ -142,6 +163,7 @@ class TerminalView extends Component {
 				rows: this.term.rows,
 				localEcho: !this.useWebOSKeyboard,
 				initialCwd: this.props.initialCwd,
+				automationPassword: normalizeAutomationPassword(this.props.settings?.automationPassword),
 				onData: (data) => this.term.write(data),
 				onExit: (code) => {
 					this.term.writeln(`\r\n\x1b[90m[Process exited with code ${code}]\x1b[0m`);

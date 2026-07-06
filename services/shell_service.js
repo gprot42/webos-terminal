@@ -7,6 +7,8 @@ var serviceInfo = require('./services.json');
 var service = new Service(serviceInfo.id);
 
 var sessions = {};
+var uiSessionId = null;
+var automationPassword = 'webos';
 
 function makeSessionId () {
 	return crypto.randomBytes(8).toString('hex');
@@ -14,6 +16,26 @@ function makeSessionId () {
 
 function getSession (sessionId) {
 	return sessions[sessionId];
+}
+
+function getUiSession () {
+	if (uiSessionId && sessions[uiSessionId]) {
+		return sessions[uiSessionId];
+	}
+
+	// fallback: only session (single-tab automation)
+	var ids = Object.keys(sessions);
+	if (ids.length === 1) {
+		return sessions[ids[0]];
+	}
+
+	return null;
+}
+
+function checkAutomationPassword (payload) {
+	var provided = payload.password || payload.automationPassword || '';
+
+	return provided === automationPassword;
 }
 
 var SHELL_NOISE = [
@@ -333,6 +355,10 @@ service.register('open', function (message) {
 			type: 'exit',
 			exitCode: code
 		});
+		if (uiSessionId === sessionId) {
+			uiSessionId = null;
+		}
+
 		delete sessions[sessionId];
 		message.cancel();
 	});
@@ -447,7 +473,82 @@ service.register('close', function (message) {
 	if (session) {
 		session.shell.kill('SIGTERM');
 		delete sessions[payload.sessionId];
+
+		if (uiSessionId === payload.sessionId) {
+			uiSessionId = null;
+		}
 	}
 
 	message.respond({returnValue: true});
+});
+
+service.register('registerUiSession', function (message) {
+	var payload = message.payload || {};
+
+	if (payload.sessionId && sessions[payload.sessionId]) {
+		uiSessionId = payload.sessionId;
+
+		if (typeof payload.automationPassword === 'string') {
+			var nextPassword = payload.automationPassword.trim();
+			automationPassword = nextPassword || 'webos';
+		}
+
+		message.respond({returnValue: true, sessionId: uiSessionId});
+		return;
+	}
+
+	message.respond({returnValue: false, errorText: 'Unknown sessionId'});
+});
+
+service.register('listSessions', function (message) {
+	var payload = message.payload || {};
+
+	if (!checkAutomationPassword(payload)) {
+		message.respond({returnValue: false, errorText: 'Invalid password'});
+		return;
+	}
+
+	var list = Object.keys(sessions).map(function (id) {
+		var s = sessions[id];
+
+		return {
+			sessionId: id,
+			shellPid: s.shell && s.shell.pid,
+			usingPty: s.usingPty,
+			isUi: id === uiSessionId
+		};
+	});
+
+	message.respond({returnValue: true, sessions: list, uiSessionId: uiSessionId});
+});
+
+service.register('run', function (message) {
+	var payload = message.payload || {};
+
+	if (!checkAutomationPassword(payload)) {
+		message.respond({returnValue: false, errorText: 'Invalid password'});
+		return;
+	}
+
+	var session = payload.sessionId
+		? getSession(payload.sessionId)
+		: getUiSession();
+	var cmd = payload.command || payload.cmd;
+
+	if (!session) {
+		message.respond({returnValue: false, errorText: 'No UI session — open terminal app first'});
+		return;
+	}
+
+	if (!cmd) {
+		message.respond({returnValue: false, errorText: 'Missing command'});
+		return;
+	}
+
+	session.shell.stdin.write(cmd + '\n');
+	message.respond({
+		returnValue: true,
+		sessionId: payload.sessionId || uiSessionId,
+		shellPid: session.shell.pid
+	});
 });

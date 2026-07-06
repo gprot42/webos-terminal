@@ -3,7 +3,24 @@
 	"description": "Interactive shell service for webOS Terminal",
 	"services": [
 		{
-			"name": "com.github.gprot42.webosterminal.service"
+			"name": "com.github.gprot42.webosterminal.service",
+			"commands": [
+				{
+					"name": "registerUiSession",
+					"description": "Mark which shell session is displayed in the UI",
+					"public": true
+				},
+				{
+					"name": "listSessions",
+					"description": "List active shell sessions for automation",
+					"public": true
+				},
+				{
+					"name": "run",
+					"description": "Run a command in the UI shell session",
+					"public": true
+				}
+			]
 		}
 	]
 }

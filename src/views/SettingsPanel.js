@@ -3,7 +3,12 @@ import BodyText from '@enact/limestone/BodyText';
 import {Panel, Header} from '@enact/limestone/Panels';
 import Dropdown from '@enact/limestone/Dropdown';
 
-import {FONT_SIZE_OPTIONS, KEYBOARD_MODES, TERMINAL_ROW_OPTIONS} from '../utils/settings';
+import {
+	DEFAULT_AUTOMATION_PASSWORD,
+	FONT_SIZE_OPTIONS,
+	KEYBOARD_MODES,
+	TERMINAL_ROW_OPTIONS
+} from '../utils/settings';
 import {VERSION} from '../version';
 
 import css from './SettingsPanel.module.less';
@@ -39,6 +44,9 @@ const SettingsPanel = kind({
 		},
 		onSelectKeyboardMode: (ev, {onSettingsChange}) => {
 			onSettingsChange?.({keyboardMode: KEYBOARD_MODE_VALUES[ev.selected]});
+		},
+		onAutomationPasswordChange: (ev, {onSettingsChange}) => {
+			onSettingsChange?.({automationPassword: ev.target.value});
 		}
 	},
 
@@ -55,6 +63,7 @@ const SettingsPanel = kind({
 		onSelectRows,
 		onSelectFontSize,
 		onSelectKeyboardMode,
+		onAutomationPasswordChange,
 		settings, // eslint-disable-line no-unused-vars
 		onSettingsChange, // eslint-disable-line no-unused-vars
 		...rest
@@ -110,6 +119,30 @@ const SettingsPanel = kind({
 								the on-screen keyboard while it is open. USB or Bluetooth
 								keyboards work automatically; webOS hides the on-screen keyboard
 								when physical keys are pressed.
+							</BodyText>
+						</div>
+					</div>
+					<div className={css.row}>
+						<div className={css.field}>
+							<label className={css.label} htmlFor="automation-password">
+								SSH automation password
+							</label>
+							<input
+								autoCapitalize="off"
+								autoComplete="off"
+								autoCorrect="off"
+								className={css.textInput}
+								id="automation-password"
+								onChange={onAutomationPasswordChange}
+								spellCheck={false}
+								type="text"
+								value={settings.automationPassword || DEFAULT_AUTOMATION_PASSWORD}
+							/>
+							<BodyText className={css.help} size="small">
+								Required for SSH luna-send run/listSessions. Default is
+								{' '}
+								{DEFAULT_AUTOMATION_PASSWORD}
+								.
 							</BodyText>
 						</div>
 					</div>

@@ -25,6 +25,9 @@ class MainPanel extends Component {
 	constructor (props) {
 		super(props);
 
+		const params = typeof window !== 'undefined' ? window.webOSSystem?.launchParams || {} : {};
+		this.automation = params.automation === true || params.automation === 'true';
+
 		const persisted = loadTabState();
 
 		if (persisted?.tabs?.length) {
@@ -197,6 +200,7 @@ class MainPanel extends Component {
 							>
 								<TerminalView
 									active={activeTabId === tab.id}
+									automation={this.automation}
 									initialCwd={tab.cwd}
 									onCwdChange={(cwd) => this.handleCwdChange(tab.id, cwd)}
 									settings={settings}
