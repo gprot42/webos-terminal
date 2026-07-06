@@ -9,8 +9,6 @@ import {
 	KEYBOARD_MODES,
 	TERMINAL_ROW_OPTIONS
 } from '../utils/settings';
-import {VERSION} from '../version';
-
 import css from './SettingsPanel.module.less';
 
 const KEYBOARD_MODE_VALUES = [KEYBOARD_MODES.AUTO, KEYBOARD_MODES.MANUAL, KEYBOARD_MODES.PHYSICAL];
@@ -27,7 +25,12 @@ const SettingsPanel = kind({
 	name: 'SettingsPanel',
 
 	propTypes: {
+		appVersion: function () {},
 		onSettingsChange: function () {}
+	},
+
+	defaultProps: {
+		appVersion: ''
 	},
 
 	styles: {
@@ -57,6 +60,7 @@ const SettingsPanel = kind({
 	},
 
 	render: ({
+		appVersion,
 		rowsSelected,
 		fontSizeSelected,
 		keyboardModeSelected,
@@ -148,7 +152,7 @@ const SettingsPanel = kind({
 					</div>
 				</div>
 				<BodyText className={css.version} size="small">
-					{`Version ${VERSION}`}
+					{`Version ${appVersion}`}
 				</BodyText>
 			</div>
 		</Panel>

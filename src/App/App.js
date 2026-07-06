@@ -1,9 +1,11 @@
 import {Component} from 'react';
 import ThemeDecorator from '@enact/limestone/ThemeDecorator';
 import Panels from '@enact/limestone/Panels';
+import {fetchAppInfo} from '@enact/webos/application';
 
 import {closeApp} from '../utils/closeApp';
 import {defaultSettings, loadSettings, saveSettings} from '../utils/settings';
+import {VERSION} from '../version';
 import MainPanel from '../views/MainPanel';
 import SettingsPanel from '../views/SettingsPanel';
 
@@ -17,8 +19,19 @@ class App extends Component {
 
 		this.state = {
 			panelIndex: 0,
-			settings: loadSettings()
+			settings: loadSettings(),
+			appVersion: VERSION
 		};
+	}
+
+	componentDidMount () {
+		fetchAppInfo((info) => {
+			const appVersion = info?.version || VERSION;
+
+			if (appVersion !== this.state.appVersion) {
+				this.setState({appVersion});
+			}
+		});
 	}
 
 	handleOpenSettings = () => {
@@ -38,7 +51,7 @@ class App extends Component {
 	};
 
 	render () {
-		const {panelIndex, settings} = this.state;
+		const {panelIndex, settings, appVersion} = this.state;
 
 		return (
 			<Panels
@@ -53,6 +66,7 @@ class App extends Component {
 					settings={settings}
 				/>
 				<SettingsPanel
+					appVersion={appVersion}
 					onSettingsChange={this.handleSettingsChange}
 					settings={settings}
 				/>

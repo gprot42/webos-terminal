@@ -5,10 +5,10 @@
 	"author": "webOS Homebrew",
 	"main": "src/index.js",
 	"scripts": {
-		"serve": "enact serve",
+		"serve": "node scripts/sync-version.js && enact serve",
 		"pack": "node scripts/sync-version.js && enact pack && node scripts/downlevel-syntax.js",
 		"pack-p": "node scripts/sync-version.js && enact pack -p && node scripts/downlevel-syntax.js",
-		"watch": "enact pack --watch",
+		"watch": "node scripts/sync-version.js && enact pack --watch",
 		"clean": "enact clean",
 		"lint": "enact lint .",
 		"license": "enact license",
