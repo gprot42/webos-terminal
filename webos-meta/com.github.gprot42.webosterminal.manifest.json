@@ -9,7 +9,7 @@
 	"rootRequired": true,
 	"ipkUrl": "com.github.gprot42.webosterminal_0.0.7_all.ipk",
 	"ipkHash": {
-		"sha256": "ef39dfc5fa9f1f7bd475528aabbe92b73cb265745eaba7975dccdb79c5ddf0db"
+		"sha256": "58e4e9944240f698433be3fd9dd1a0edc8f1852232a74bab0545581ed1cdd773"
 	},
-	"ipkSize": 8656776
+	"ipkSize": 8656862
 }
