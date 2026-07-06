@@ -1,6 +1,6 @@
 {
 	"name": "com.github.gprot42.webosterminal.service",
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"main": "shell_service.js",
 	"dependencies": {
 		"webos-service": "^1.2.1"

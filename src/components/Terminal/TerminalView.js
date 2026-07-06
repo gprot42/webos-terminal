@@ -13,12 +13,14 @@ import {
 	detachTerminalTextarea,
 	focusInputElement,
 	isKeyboardVisible,
+	isVkbSelectKey,
 	isWebOSTV,
 	mapKeyDownToTerminal,
 	pauseSpotlightForKeyboard,
 	resumeSpotlightForKeyboard,
 	syncProxyInputDelta
 } from '../../utils/keyboard';
+import {getFontFamilyStack} from '../../utils/fonts';
 import {
 	clampFontSize,
 	clampTerminalRows,
@@ -47,7 +49,9 @@ class TerminalView extends Component {
 		this.fitFrame = null;
 		this.proxyInputFrame = null;
 		this.proxyInputLength = 0;
+		this.ignoreProxyNewline = false;
 		this.proxyPollInterval = null;
+		this.terminalKeyboardSession = false;
 		this.initialized = false;
 		this.useWebOSKeyboard = isWebOSTV();
 		this.unregisterCleanup = null;
@@ -80,6 +84,10 @@ class TerminalView extends Component {
 
 		if (prevProps.settings?.fontSize !== this.props.settings?.fontSize) {
 			this.applyFontSize();
+		}
+
+		if (prevProps.settings?.fontFamily !== this.props.settings?.fontFamily) {
+			this.applyFontFamily();
 		}
 
 		if (prevProps.settings?.automationPassword !== this.props.settings?.automationPassword) {
@@ -129,7 +137,7 @@ class TerminalView extends Component {
 				cursorBlink: true,
 				convertEol: true,
 				fontSize: this.getConfiguredFontSize(),
-				fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+				fontFamily: this.getConfiguredFontFamily(),
 				theme: {
 					background: '#1a1a1a',
 					foreground: '#f0f0f0',
@@ -212,6 +220,10 @@ class TerminalView extends Component {
 		return clampFontSize(this.props.settings?.fontSize);
 	}
 
+	getConfiguredFontFamily () {
+		return getFontFamilyStack(this.props.settings?.fontFamily);
+	}
+
 	applyFontSize () {
 		if (!this.term) {
 			return;
@@ -225,6 +237,19 @@ class TerminalView extends Component {
 		}
 	}
 
+	applyFontFamily () {
+		if (!this.term) {
+			return;
+		}
+
+		const fontFamily = this.getConfiguredFontFamily();
+
+		if (this.term.options.fontFamily !== fontFamily) {
+			this.term.options.fontFamily = fontFamily;
+			this.applyTerminalSize();
+		}
+	}
+
 	shouldUseOnScreenKeyboard () {
 		return this.useWebOSKeyboard &&
 			this.props.settings?.keyboardMode !== KEYBOARD_MODES.PHYSICAL;
@@ -232,6 +257,12 @@ class TerminalView extends Component {
 
 	applyTerminalSize () {
 		if (!this.term || !this.fitAddon || !this.containerRef) {
+			return;
+		}
+
+		// Refitting while the VKB is open can desync keyboard visibility and break
+		// Enter handling on the on-screen keyboard.
+		if (isKeyboardVisible()) {
 			return;
 		}
 
@@ -305,7 +336,11 @@ class TerminalView extends Component {
 		// Treat that as a line submit: forward as a carriage return and reset the
 		// field so the next command starts clean.
 		if (/[\r\n]/.test(delta)) {
-			this.sendToTerminal(delta.replace(/\r?\n/g, '\r'));
+			if (this.ignoreProxyNewline) {
+				this.ignoreProxyNewline = false;
+			} else {
+				this.sendToTerminal(delta.replace(/\r?\n/g, '\r'));
+			}
 
 			if (this.proxyInputRef) {
 				this.proxyInputRef.value = '';
@@ -351,7 +386,21 @@ class TerminalView extends Component {
 		}
 	};
 
+	isTerminalKeyboardInputFocused () {
+		const activeElement = document.activeElement;
+
+		return activeElement === this.proxyInputRef ||
+			activeElement === this.searchInputRef;
+	}
+
 	handleKeyboardVisible = () => {
+		// Settings and other non-terminal text fields manage their own VKB focus.
+		if (this.props.settingsOpen || !this.isTerminalKeyboardInputFocused()) {
+			return;
+		}
+
+		this.terminalKeyboardSession = true;
+
 		// Pause Spotlight for the whole VKB session. Without this, Spotlight moves
 		// focus back onto the terminal region, blurs the proxy input, and the VKB
 		// closes again after ~1s (flicker). Pausing does NOT block the system VKB's
@@ -360,7 +409,11 @@ class TerminalView extends Component {
 		this.startProxyInputPoll();
 	};
 
-	submitProxyLine = () => {
+	submitProxyLine = ({fromVkb = false} = {}) => {
+		if (fromVkb) {
+			this.ignoreProxyNewline = true;
+		}
+
 		this.sendToTerminal('\r');
 
 		if (this.proxyInputRef) {
@@ -371,23 +424,27 @@ class TerminalView extends Component {
 	};
 
 	handleProxyKeyDown = (event) => {
-		// While the system VKB is open, let webOS fully own every key: navigation
+		// While the system VKB is open, let webOS fully own most keys: navigation
 		// (arrows) so the highlight can reach the ENG/umlaut column, OK/select so
-		// those keys activate, and Enter/accents. We must NOT preventDefault or
-		// stopPropagation here -- doing so blocks the VKB's own key handling. The
-		// input poll captures the resulting text, backspaces, and newline-submit.
-		// Spotlight is paused for the VKB session, so it won't act on these keys.
+		// those keys activate, and accents. We must NOT preventDefault or
+		// stopPropagation for those -- doing so blocks the VKB's own key handling.
+		// Enter is handled explicitly because webOS often emits keyCode 16777221
+		// without inserting a newline into the proxy field.
 		if (isKeyboardVisible()) {
+			if (isVkbSelectKey(event)) {
+				this.submitProxyLine({fromVkb: true});
+			}
+
 			return;
 		}
 
-		const code = event.keyCode || event.which;
-
-		if (code === 13) {
+		if (isVkbSelectKey(event)) {
 			event.preventDefault();
 			this.submitProxyLine();
 			return;
 		}
+
+		const code = event.keyCode || event.which;
 
 		const data = mapKeyDownToTerminal(event);
 
@@ -468,6 +525,11 @@ class TerminalView extends Component {
 	};
 
 	handleKeyboardHidden = () => {
+		if (!this.terminalKeyboardSession) {
+			return;
+		}
+
+		this.terminalKeyboardSession = false;
 		resumeSpotlightForKeyboard();
 		this.stopProxyInputPoll();
 		this.scheduleFit();
@@ -705,6 +767,7 @@ class TerminalView extends Component {
 							autoComplete="off"
 							autoCorrect="off"
 							className={css.searchInput}
+							data-terminal-keyboard-input="true"
 							onChange={this.handleSearchInput}
 							onKeyDown={this.handleSearchKeyDown}
 							placeholder="Find in scrollback..."
@@ -737,6 +800,7 @@ class TerminalView extends Component {
 						autoComplete="off"
 						autoCorrect="off"
 						className={css.hiddenProxy}
+						data-terminal-keyboard-input="true"
 						inputMode="text"
 						onBlur={this.handleProxyBlur}
 						onChange={this.handleProxyInput}

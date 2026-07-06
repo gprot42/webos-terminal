@@ -2,6 +2,8 @@ import Pause from '@enact/spotlight/Pause';
 import {isShowing} from '@enact/webos/keyboard';
 
 const spotlightPause = new Pause('webos-terminal-vkb');
+const VKB_ARROW_KEY_CODES = new Set([37, 38, 39, 40]);
+const VKB_SELECT_KEY_CODES = new Set([13, 16777221]);
 
 export function isWebOSTV () {
 	return typeof window !== 'undefined' && (
@@ -39,7 +41,7 @@ export function syncProxyInputDelta (input, previousLength = 0) {
 export function mapKeyDownToTerminal (event) {
 	const code = event.keyCode || event.which;
 
-	if (code === 13) {
+	if (VKB_SELECT_KEY_CODES.has(code)) {
 		return '\r';
 	}
 
@@ -98,8 +100,9 @@ export function getInputLanguage () {
 	return undefined;
 }
 
-const VKB_ARROW_KEY_CODES = new Set([37, 38, 39, 40]);
-const VKB_SELECT_KEY_CODES = new Set([13, 16777221]);
+export function isTerminalKeyboardElement (element) {
+	return element?.dataset?.terminalKeyboardInput === 'true';
+}
 
 export function setKeyboardLayoutLock (locked) {
 	if (typeof document === 'undefined') {
@@ -108,7 +111,9 @@ export function setKeyboardLayoutLock (locked) {
 
 	document.body.classList.toggle('vkb-layout-locked', locked);
 
-	if (locked) {
+	// Only reset scroll position for terminal typing. Doing this while a settings
+	// text field is focused blurs the field and immediately dismisses the VKB.
+	if (locked && isTerminalKeyboardElement(document.activeElement)) {
 		window.scrollTo(0, 0);
 	}
 }

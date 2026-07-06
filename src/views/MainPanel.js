@@ -138,7 +138,7 @@ class MainPanel extends Component {
 	};
 
 	render () {
-		const {onOpenSettings, settings} = this.props;
+		const {onOpenSettings, settings, settingsOpen = false} = this.props;
 		const {tabs, activeTabId} = this.state;
 		const atTabLimit = tabs.length >= MAX_TABS;
 
@@ -204,6 +204,7 @@ class MainPanel extends Component {
 									initialCwd={tab.cwd}
 									onCwdChange={(cwd) => this.handleCwdChange(tab.id, cwd)}
 									settings={settings}
+									settingsOpen={settingsOpen}
 									tabId={tab.id}
 								/>
 							</div>

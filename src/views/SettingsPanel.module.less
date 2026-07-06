@@ -20,58 +20,213 @@
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+	gap: 14px;
 	overflow-y: auto;
-	padding: 0 24px 24px;
+	padding: 10px 42px 12px;
 	min-height: 0;
 }
 
-.row {
+.section,
+.heroSection {
 	display: flex;
-	flex-direction: row;
-	align-items: flex-start;
-
-	& + & {
-		margin-top: 36px;
-	}
+	flex-direction: column;
+	gap: 10px;
 }
 
-.field {
-	flex: 1;
-	min-width: 0;
-
-	& + & {
-		margin-left: 48px;
-	}
+.heroSection {
+	padding-bottom: 0;
 }
 
-.label {
+.sectionIntro {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding-bottom: 2px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.sectionTitle {
+	margin: 0;
+	font-size: var(--primitive-font-size-42);
+	font-weight: var(--primitive-font-weight-bold);
+	letter-spacing: 0.02em;
+	color: #f2f2f2;
+}
+
+.sectionSubtitle {
+	margin: 0;
+	font-size: var(--primitive-font-size-30);
+	line-height: 1.3;
+	opacity: 0.48;
+}
+
+.cardRow {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	align-items: stretch;
+}
+
+.inputStack {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 12px;
+	align-items: stretch;
+}
+
+.card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 14px;
+	background: linear-gradient(160deg, rgba(42, 42, 42, 0.92) 0%, rgba(28, 28, 28, 0.96) 100%);
+	border: 1px solid rgba(255, 255, 255, 0.07);
+	border-radius: 10px;
+	box-shadow:
+		0 8px 24px rgba(0, 0, 0, 0.18),
+		inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.cardHelp {
+	opacity: 0.62;
+	line-height: 1.45;
+	margin: 0;
+}
+
+.fieldLabel {
 	display: block;
-	font-size: 24px;
-	margin-bottom: 12px;
+	font-size: var(--primitive-font-size-36);
+	font-weight: var(--primitive-font-weight-regular);
+	margin-bottom: 0;
 }
 
 .textInput {
-	width: 100%;
 	box-sizing: border-box;
-	padding: 8px 12px;
-	font-size: 24px;
+	width: 100%;
+	max-width: 18ch;
+	padding: var(--primitive-spacing-12) var(--primitive-spacing-24);
+	font-size: var(--primitive-font-size-42);
+	font-family: inherit;
+	line-height: 1.4em;
+	min-height: 2.4rem;
 	color: #f0f0f0;
-	background: #2a2a2a;
-	border: 1px solid #4a4a4a;
-	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.28);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 8px;
 }
 
-.help {
-	opacity: 0.75;
-	line-height: 1.4;
-	margin-top: 12px;
-	margin-bottom: 0;
+.fontControl {
+	padding: 0 6px;
+}
+
+.fontPreview {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 18px;
+	background:
+		linear-gradient(145deg, rgba(36, 36, 36, 0.98) 0%, rgba(22, 22, 22, 0.99) 100%);
+	border: 1px solid rgba(126, 200, 255, 0.14);
+	border-radius: 12px;
+	box-shadow:
+		0 12px 36px rgba(0, 0, 0, 0.28),
+		inset 0 1px 0 rgba(255, 255, 255, 0.05);
+	overflow: hidden;
+}
+
+.fontPreviewHeader {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fontPreviewAa {
+	flex-shrink: 0;
+	font-size: 2.4rem;
+	line-height: 1;
+	color: #7ec8ff;
+	opacity: 0.92;
+}
+
+.fontPreviewMeta {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.fontPreviewName {
+	font-size: var(--primitive-font-size-42);
+	font-weight: var(--primitive-font-weight-bold);
+	color: #f4f4f4;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.fontPreviewHint {
+	font-size: var(--primitive-font-size-30);
+	opacity: 0.52;
+	line-height: 1.25;
+}
+
+.glyphRow {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 8px;
+}
+
+.glyphChip {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 6px 8px;
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	border-radius: 8px;
+	text-align: center;
+}
+
+.glyphLabel {
+	font-size: var(--primitive-font-size-24);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	opacity: 0.42;
+	font-family: inherit;
+}
+
+.glyphChars {
+	font-size: var(--primitive-font-size-36);
+	line-height: 1.15;
+	letter-spacing: 0.08em;
+	color: #ececec;
+}
+
+.terminalSample {
+	padding: 8px 12px;
+	background: rgba(0, 0, 0, 0.38);
+	border-radius: 8px;
+	border-left: 3px solid #5a9fd4;
+}
+
+.terminalLine {
+	font-size: var(--primitive-font-size-30);
+	line-height: 1.3;
+	color: #d8d8d8;
+	white-space: pre;
+
+	&:first-child {
+		color: #8fd48f;
+	}
 }
 
 .version {
 	flex-shrink: 0;
-	opacity: 0.75;
-	padding: 0 24px 24px;
+	opacity: 0.55;
+	padding: 0 42px 10px;
 	margin: 0;
 	text-align: center;
+	letter-spacing: 0.04em;
 }

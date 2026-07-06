@@ -16,6 +16,59 @@ export const DEFAULT_FONT_SIZE = 18;
 export const MIN_FONT_SIZE = 8;
 export const MAX_FONT_SIZE = 48;
 
+export const FONT_FAMILY_OPTIONS = [
+	{
+		id: 'monospace',
+		label: 'System Monospace',
+		family: 'monospace',
+		bundled: false,
+		description: 'Your TV\'s built-in fixed-width font'
+	},
+	{
+		id: 'jetbrains',
+		label: 'JetBrains Mono',
+		family: '"JetBrains Mono", monospace',
+		bundled: true,
+		description: 'Designed for long coding sessions'
+	},
+	{
+		id: 'ibm-plex',
+		label: 'IBM Plex Mono',
+		family: '"IBM Plex Mono", monospace',
+		bundled: true,
+		description: 'Crisp and readable at every size'
+	},
+	{
+		id: 'cascadia',
+		label: 'Cascadia Mono',
+		family: '"Cascadia Mono", monospace',
+		bundled: true,
+		description: 'The Windows Terminal typeface'
+	},
+	{
+		id: 'dejavu',
+		label: 'DejaVu Sans Mono',
+		family: '"DejaVu Mono", monospace',
+		bundled: true,
+		description: 'Broad Unicode and symbol coverage'
+	},
+	{
+		id: 'fira',
+		label: 'Fira Mono',
+		family: '"Fira Mono", monospace',
+		bundled: true,
+		description: 'Humanist monospace with open forms'
+	}
+];
+
+const LEGACY_FONT_IDS = {
+	liberation: 'dejavu',
+	courier: 'monospace',
+	'courier-new': 'monospace',
+	'source-code': 'jetbrains'
+};
+export const DEFAULT_FONT_FAMILY = 'monospace';
+
 export const DEFAULT_AUTOMATION_PASSWORD = 'webos';
 
 export function normalizeAutomationPassword (password) {
@@ -48,10 +101,18 @@ export function clampFontSize (size) {
 	return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(value)));
 }
 
+export function normalizeFontFamily (fontFamily) {
+	const normalizedId = LEGACY_FONT_IDS[fontFamily] || fontFamily;
+	const match = FONT_FAMILY_OPTIONS.find((option) => option.id === normalizedId);
+
+	return match ? match.id : DEFAULT_FONT_FAMILY;
+}
+
 export const defaultSettings = {
 	keyboardMode: KEYBOARD_MODES.AUTO,
 	terminalRows: DEFAULT_TERMINAL_ROWS,
 	fontSize: DEFAULT_FONT_SIZE,
+	fontFamily: DEFAULT_FONT_FAMILY,
 	automationPassword: DEFAULT_AUTOMATION_PASSWORD
 };
 
@@ -67,10 +128,14 @@ export function loadSettings () {
 			return {...defaultSettings};
 		}
 
-		const stored = {...defaultSettings, ...JSON.parse(raw)};
+		const parsed = JSON.parse(raw);
+		const stored = {...defaultSettings, ...parsed};
 
 		stored.terminalRows = clampTerminalRows(stored.terminalRows);
 		stored.fontSize = clampFontSize(stored.fontSize);
+		stored.fontFamily = normalizeFontFamily(
+			typeof parsed.fontFamily === 'string' ? parsed.fontFamily : defaultSettings.fontFamily
+		);
 		stored.automationPassword = normalizeAutomationPassword(stored.automationPassword);
 
 		return stored;

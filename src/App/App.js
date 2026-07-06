@@ -4,6 +4,7 @@ import Panels from '@enact/limestone/Panels';
 import {fetchAppInfo} from '@enact/webos/application';
 
 import {closeApp} from '../utils/closeApp';
+import {resumeSpotlightForKeyboard} from '../utils/keyboard';
 import {defaultSettings, loadSettings, saveSettings} from '../utils/settings';
 import {VERSION} from '../version';
 import MainPanel from '../views/MainPanel';
@@ -39,6 +40,7 @@ class App extends Component {
 	};
 
 	handleBack = () => {
+		resumeSpotlightForKeyboard();
 		this.setState({panelIndex: 0});
 	};
 
@@ -64,6 +66,7 @@ class App extends Component {
 				<MainPanel
 					onOpenSettings={this.handleOpenSettings}
 					settings={settings}
+					settingsOpen={panelIndex > 0}
 				/>
 				<SettingsPanel
 					appVersion={appVersion}

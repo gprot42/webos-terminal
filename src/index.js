@@ -2,6 +2,7 @@
 import {createRoot, hydrateRoot} from 'react-dom/client';
 
 import './polyfills';
+import './fonts';
 import App from './App';
 
 const appElement = (<App />);
