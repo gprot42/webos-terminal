@@ -8,15 +8,19 @@ const SHELL_NOISE = [
 	/script: failed to create pseudo-terminal:.*\r?\n?/g
 ];
 
-function filterShellNoise (text) {
+// Strip known shell startup noise. For piped (non-PTY) sessions also drop lone
+// CRs that jump the cursor to column 0. Real PTYs use bare CR for cursor
+// control in full-screen apps, so those must be preserved.
+function filterShellNoise (text, {piped = true} = {}) {
 	let filtered = text;
 
 	for (const pattern of SHELL_NOISE) {
 		filtered = filtered.replace(pattern, '');
 	}
 
-	// Piped shells often emit lone CRs that jump the cursor to column 0.
-	filtered = filtered.replace(/\r(?!\n)/g, '');
+	if (piped) {
+		filtered = filtered.replace(/\r(?!\n)/g, '');
+	}
 
 	return filtered;
 }
@@ -71,7 +75,7 @@ function isWebOS () {
 }
 
 class ShellSession {
-	constructor ({cols = 80, rows = 24, initialCwd, automationPassword, onData, onExit, onError, onCwdChange, localEcho = true}) {
+	constructor ({cols = 80, rows = 24, initialCwd, automationPassword, onData, onExit, onError, onCwdChange, onInputModeChange, localEcho = true}) {
 		this.cols = cols;
 		this.rows = rows;
 		this.initialCwd = initialCwd;
@@ -80,18 +84,23 @@ class ShellSession {
 		this.onExit = onExit;
 		this.onError = onError;
 		this.onCwdChange = onCwdChange;
+		this.onInputModeChange = onInputModeChange;
+		// Requested local echo for line-buffered modes. Forced off once a real
+		// PTY is confirmed (the shell/TTY owns echo and line editing).
 		this.localEcho = localEcho;
 		this.sessionId = null;
 		this.request = null;
 		this.closed = false;
 		this.mode = 'mock';
+		// True when the native service attached a real PTY (ptybridge/script).
+		// Input is then forwarded byte-for-byte; shell readline/TUIs own editing.
+		this.usingPty = false;
 		this.inputBuffer = '';
 		this.mockHistory = [];
 
-		// Client-side command history for native/homebrew modes. Neither mode
-		// has a real tty (no PTY in the service jail, or no stdin channel at
-		// all for the Homebrew spawn fallback), so the shell itself can't do
-		// readline-style recall -- we emulate up/down history ourselves.
+		// Client-side command history for piped native / homebrew modes only.
+		// Those lack a real tty, so the shell can't do readline-style recall
+		// and we emulate up/down history ourselves. Unused when usingPty.
 		this.history = [];
 		this.historyIndex = -1;
 		this.historyDraft = '';
@@ -101,6 +110,20 @@ class ShellSession {
 		} else {
 			this._openMockSession();
 		}
+	}
+
+	// Raw character passthrough: native session with a working PTY.
+	// Callers must not local-echo in this mode (the PTY/shell echoes).
+	usesRawInput () {
+		return this.mode === 'native' && this.usingPty;
+	}
+
+	_notifyInputModeChange () {
+		this.onInputModeChange?.({
+			mode: this.mode,
+			usingPty: this.usingPty,
+			raw: this.usesRawInput()
+		});
 	}
 
 	_openNativeSession () {
@@ -114,11 +137,21 @@ class ShellSession {
 				if (response.sessionId && !this.sessionId) {
 					this.sessionId = response.sessionId;
 					this.mode = 'native';
+					this.usingPty = Boolean(response.usingPty);
+
+					if (this.usingPty) {
+						// Shell/TTY owns echo, history, tab-complete, and raw apps.
+						this.localEcho = false;
+					}
+
 					this.registerUiSession(this.automationPassword);
+					this._notifyInputModeChange();
 				}
 
 				if (response.type === 'stdout' || response.type === 'stderr') {
-					const output = filterShellNoise(decodeBase64(response.data));
+					const output = filterShellNoise(decodeBase64(response.data), {
+						piped: !this.usingPty
+					});
 					if (output) {
 						this.onData(output);
 					}
@@ -138,6 +171,8 @@ class ShellSession {
 		this.request?.cancel();
 		this.request = new LS2Request();
 		this.mode = 'homebrew';
+		this.usingPty = false;
+		this._notifyInputModeChange();
 		this.onData(
 			'\r\n\x1b[33m[Degraded mode: Homebrew Channel spawn service]\x1b[0m\r\n' +
 			'Each command runs in its own fresh shell -- no persistent state\r\n' +
@@ -176,6 +211,8 @@ class ShellSession {
 
 	_openMockSession (reason) {
 		this.mode = 'mock';
+		this.usingPty = false;
+		this._notifyInputModeChange();
 		this.onData(
 			'\x1b[1;32mwebOS Terminal\x1b[0m (browser preview)\r\n' +
 			(reason ? `\x1b[33m${reason}\x1b[0m\r\n` : '') +
@@ -333,6 +370,20 @@ class ShellSession {
 			return;
 		}
 
+		// Real PTY: forward every keystroke immediately. The shell owns
+		// readline history, tab-complete, job control, and full-screen apps.
+		if (this.usesRawInput()) {
+			this._nativeWrite(data);
+
+			// Best-effort cwd refresh after the user submits a line (Enter).
+			if (/[\r\n]/.test(data)) {
+				this._pollCwd();
+			}
+
+			return;
+		}
+
+		// Piped / homebrew: client-side line editing + history.
 		if (data === '\x1b[A') {
 			this._historyUp();
 			return;

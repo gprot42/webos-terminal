@@ -38,11 +38,11 @@ In this early release you can:
 - Use the app with your TV remote and on-screen keyboard
 - Work on a TV-sized terminal with readable text and scrolling
 - Open multiple tabs, each with its own shell session
+- With a real PTY (service elevated as root): shell line editing, history, tab completion, job control, and full-screen apps such as `vim`, `htop`, `less`, and `tmux`
 
 Planned for later:
 
 - File browsing
-- Command history and autocomplete
 - Log viewing
 
 ## Requirements
@@ -73,7 +73,9 @@ This is an **early MVP**. It works for basic interactive shell use on rooted dev
 
 ### PTY support
 
-A real terminal session (job control, `vim`, `htop`, `less`, `tmux`) needs a pseudo-terminal (PTY), which the default jailed `prisoner` user can't allocate (`/dev/ptmx` is blocked). To fix this, the app ships **`ptybridge`** — a small native helper (`native/ptybridge/ptybridge.c`) that allocates and bridges a real PTY itself, independent of whatever shell it inherited from.
+A real terminal session (job control, shell readline, tab completion, `vim`, `htop`, `less`, `tmux`) needs a pseudo-terminal (PTY), which the default jailed `prisoner` user can't allocate (`/dev/ptmx` is blocked). To fix this, the app ships **`ptybridge`** — a small native helper (`native/ptybridge/ptybridge.c`) that allocates and bridges a real PTY itself, independent of whatever shell it inherited from.
+
+When the service reports a working PTY, the client switches to **raw character passthrough**: every keystroke goes straight to the shell, and the shell/TTY owns echo, history, completion, and full-screen apps. Without a PTY (piped fallback), the app keeps its client-side line buffer and up/down history instead.
 
 The service picks the right prebuilt binary for your TV's CPU automatically at runtime (matched against `process.arch`), and it's compiled statically so it has no runtime library dependencies:
 

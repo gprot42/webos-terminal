@@ -1,6 +1,6 @@
 {
 	"name": "webos-terminal",
-	"version": "0.0.10",
+	"version": "0.0.11",
 	"description": "Native terminal emulator for LG webOS TVs",
 	"author": "webOS Homebrew",
 	"main": "src/index.js",

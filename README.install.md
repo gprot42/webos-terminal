@@ -134,7 +134,7 @@ By default the terminal runs as the `prisoner` user inside the homebrew jail (`$
 The homebrew jail the `prisoner` user runs in blocks more than just a handful of file paths — it also denies access to `/dev/ptmx`, the device Linux uses to allocate a **pseudo-terminal (PTY)**. Without a PTY, the shell has no real TTY attached, which means:
 
 - No job control (`Ctrl+Z`, `bg`/`fg`, backgrounding jobs)
-- No line editing inside the shell itself (the app emulates basic history/backspace client-side instead)
+- No line editing or tab completion inside the shell itself (the app emulates basic history/backspace client-side instead)
 - Full-screen terminal apps that need raw-mode input — `vim`, `htop`, `less`, `man`, `tmux` — either fail to start or render garbled
 
 Elevating the service moves it **outside** the jail, which removes most filesystem restrictions and gives it access to `/dev/ptmx` — the prerequisite for a working PTY.
@@ -147,6 +147,8 @@ The service tries three mechanisms, in order, and automatically falls back if on
 2. **`script -q -c "/bin/sh -i" /dev/null`** — a generic PTY wrapper, tried if `ptybridge` is missing or fails.
 3. **Piped shell** (no PTY) — `/bin/sh -i` with plain pipes, the final fallback. Works for ordinary commands but no job control or full-screen apps; the app emulates basic line history client-side to compensate.
 
+When a PTY is available (`ptybridge` or `script`), the UI switches to **raw input passthrough**: keystrokes, arrows, Tab, and Ctrl sequences go straight to the shell. The shell then provides its own readline history, tab completion, and echo. When only the piped fallback is available, the client keeps line-buffering and local up/down history instead.
+
 `ptybridge` is compiled statically (no runtime library dependencies) for three CPU architectures, and the service auto-selects the right one for your TV at runtime:
 
 | Architecture | Binary | Covers |
@@ -157,7 +159,7 @@ The service tries three mechanisms, in order, and automatically falls back if on
 
 All three require the service to run as **root** — `ptybridge` still needs `/dev/ptmx`, which the `prisoner` jail blocks regardless of which mechanism is used.
 
-**Bottom line:** run as root to get a real PTY via `ptybridge` — job control and full-screen apps (`vim`, `htop`, `tmux`) work once elevated, on any of the three supported architectures. If `ptybridge` ever fails on a specific TV's kernel/firmware, the app transparently falls back to `script`, then to the piped shell, so basic command-line use keeps working either way.
+**Bottom line:** run as root to get a real PTY via `ptybridge` — job control, shell history/completion, and full-screen apps (`vim`, `htop`, `tmux`) work once elevated, on any of the three supported architectures. If `ptybridge` ever fails on a specific TV's kernel/firmware, the app transparently falls back to `script`, then to the piped shell, so basic command-line use keeps working either way.
 
 ### Elevate the service
 

@@ -56,6 +56,10 @@ class TerminalView extends Component {
 		this.useWebOSKeyboard = isWebOSTV();
 		this.unregisterCleanup = null;
 		this.statusTimer = null;
+		// When the native service attaches a real PTY, input is raw and the
+		// shell/TTY echoes. Until open settles (or on piped fallback), the
+		// client still local-echoes for the line-buffered path.
+		this.rawPtyInput = false;
 		this.state = {
 			initError: null,
 			searchOpen: false,
@@ -181,6 +185,9 @@ class TerminalView extends Component {
 				},
 				onCwdChange: (cwd) => {
 					this.props.onCwdChange?.(cwd);
+				},
+				onInputModeChange: ({raw}) => {
+					this.rawPtyInput = Boolean(raw);
 				}
 			});
 
@@ -308,12 +315,22 @@ class TerminalView extends Component {
 		}
 	}
 
+	shouldLocalEcho () {
+		// Piped/line-buffered path on TV: the proxy path does not use xterm's
+		// stdin, so we echo here. Real PTY mode must not — the shell echoes.
+		if (this.rawPtyInput || this.session?.usesRawInput?.()) {
+			return false;
+		}
+
+		return this.useWebOSKeyboard;
+	}
+
 	sendToTerminal (data) {
 		if (!data || !this.session) {
 			return;
 		}
 
-		if (this.useWebOSKeyboard) {
+		if (this.shouldLocalEcho()) {
 			this.echoLocalInput(data);
 		}
 
