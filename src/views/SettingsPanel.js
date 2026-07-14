@@ -117,7 +117,10 @@ const SettingsPanel = kind({
 		onSettingsChange, // eslint-disable-line no-unused-vars
 		...rest
 	}) => (
-		<Panel {...rest}>
+		// self-only: keep 5-way / Magic Remote focus inside Settings. Without this,
+		// navigating off the rightmost control can leave the panel and fire Panels
+		// onBack (settings appears to "close" when you scroll/move to the far right).
+		<Panel {...rest} spotlightRestrict="self-only">
 			<Header title="Settings" subtitle="Appearance, input, and access" noCloseButton />
 			<div className={css.body}>
 				<div className={css.content}>

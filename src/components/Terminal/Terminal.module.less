@@ -68,15 +68,23 @@
 	min-height: 0;
 	padding: 0 24px 24px;
 	box-sizing: border-box;
-	pointer-events: none;
+	// Allow Magic Remote pointer, wheel scroll, and text selection. Focus /
+	// keyboard activation is handled on the parent focus region (events bubble).
+	pointer-events: auto;
 
 	:global(.xterm) {
 		height: 100%;
-		pointer-events: none;
+		pointer-events: auto;
 	}
 
 	:global(.xterm-viewport) {
 		overflow-y: auto !important;
+	}
+
+	// xterm's hidden textarea is only used on non-webOS; keep it from stealing
+	// pointer input when present.
+	:global(.xterm-helper-textarea) {
+		pointer-events: none;
 	}
 }
 

@@ -3,12 +3,165 @@ var crypto = require('crypto');
 var fs = require('fs');
 var Service = require('webos-service');
 
+// Node 0.10 (webOS 2.x) compatibility helpers. webOS 3–4 use 0.12; 5+ are modern.
+// Prefer Buffer.from / fs.constants when present; fall back for ancient Node.
+function bufferFrom (data, encoding) {
+	if (typeof Buffer.from === 'function') {
+		return encoding != null ? Buffer.from(data, encoding) : Buffer.from(data);
+	}
+
+	if (encoding != null) {
+		return new Buffer(data, encoding);
+	}
+
+	if (typeof data === 'string') {
+		return new Buffer(data, 'utf8');
+	}
+
+	return new Buffer(data);
+}
+
+function pathIsExecutable (candidate) {
+	try {
+		if (typeof fs.accessSync === 'function' && fs.constants && fs.constants.X_OK != null) {
+			fs.accessSync(candidate, fs.constants.X_OK);
+			return true;
+		}
+
+		// Node 0.10: no fs.accessSync — use mode bits
+		var st = fs.statSync(candidate);
+		return !!(st.mode & parseInt('111', 8));
+	} catch (err) {
+		return false;
+	}
+}
+
+// True when the JS service itself runs as uid 0 (elevated via Homebrew Channel).
+// Jailed "prisoner" services cannot open /dev/ptmx or escape the homebrew jail.
+function serviceIsRoot () {
+	try {
+		if (typeof process.getuid === 'function') {
+			return process.getuid() === 0;
+		}
+	} catch (err) {
+		// ignore
+	}
+
+	return false;
+}
+
+function serviceIdentity () {
+	var uid = null;
+	var euid = null;
+
+	try {
+		if (typeof process.getuid === 'function') {
+			uid = process.getuid();
+		}
+	} catch (err) {
+		// ignore
+	}
+
+	try {
+		if (typeof process.geteuid === 'function') {
+			euid = process.geteuid();
+		}
+	} catch (err2) {
+		// ignore
+	}
+
+	return {
+		uid: uid,
+		euid: euid,
+		isRoot: uid === 0 || euid === 0
+	};
+}
+
+// Node 0.10 (webOS 2) stdio arrays beyond 3 fds are unreliable; ptybridge's
+// resize channel needs fd 3. Detect modern-enough Node before using 4 pipes.
+function supportsExtraStdio () {
+	var m = /^v?(\d+)\.(\d+)/.exec(process.version || '');
+
+	if (!m) {
+		return false;
+	}
+
+	var major = parseInt(m[1], 10);
+	var minor = parseInt(m[2], 10);
+
+	if (major > 0) {
+		return true;
+	}
+
+	return minor >= 12;
+}
+
+// When elevated as root, keep elevation sticky across reboots/app updates by
+// installing a Homebrew Channel init.d hook (idempotent).
+function ensureBootElevateHook () {
+	if (!serviceIsRoot()) {
+		return;
+	}
+
+	var dir = '/var/lib/webosbrew/init.d';
+	var hookPath = dir + '/50-webos-terminal-elevate';
+	var body = [
+		'#!/bin/sh',
+		'# Installed by webOS Terminal service when running as root.',
+		'ELEV="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service"',
+		'SVC="com.github.gprot42.webosterminal.service"',
+		'if [ -x "$ELEV" ]; then',
+		'  "$ELEV" "$SVC" >/dev/null 2>&1 || true',
+		'fi',
+		'/usr/sbin/ls-control scan-services >/dev/null 2>&1 || true',
+		'pkill -f "$SVC" >/dev/null 2>&1 || true',
+		''
+	].join('\n');
+
+	try {
+		try {
+			fs.mkdirSync('/var/lib/webosbrew');
+		} catch (errMk1) {
+			// exists
+		}
+
+		try {
+			fs.mkdirSync(dir);
+		} catch (errMk2) {
+			// exists
+		}
+
+		if (fs.existsSync(hookPath)) {
+			try {
+				if (fs.readFileSync(hookPath, 'utf8') === body) {
+					return;
+				}
+			} catch (errRead) {
+				// rewrite
+			}
+		}
+
+		fs.writeFileSync(hookPath, body);
+
+		try {
+			fs.chmodSync(hookPath, '755');
+		} catch (errChmod) {
+			// best-effort
+		}
+	} catch (err) {
+		// not fatal — elevation still works via app/install path
+	}
+}
+
 var serviceInfo = require('./services.json');
 var service = new Service(serviceInfo.id);
 
 var sessions = {};
 var uiSessionId = null;
 var automationPassword = 'webos';
+
+// Best-effort: install boot hook as soon as an elevated service starts.
+ensureBootElevateHook();
 
 function makeSessionId () {
 	return crypto.randomBytes(8).toString('hex');
@@ -85,12 +238,11 @@ function findPtyBridgeBinary () {
 
 	var candidate = __dirname + '/bin/ptybridge-' + arch;
 
-	try {
-		fs.accessSync(candidate, fs.constants.X_OK);
+	if (pathIsExecutable(candidate)) {
 		return candidate;
-	} catch (err) {
-		return null;
 	}
+
+	return null;
 }
 
 var SCRIPT_BIN_CANDIDATES = ['/usr/bin/script', '/bin/script'];
@@ -99,11 +251,8 @@ function findScriptBinary () {
 	var i;
 
 	for (i = 0; i < SCRIPT_BIN_CANDIDATES.length; i++) {
-		try {
-			fs.accessSync(SCRIPT_BIN_CANDIDATES[i], fs.constants.X_OK);
+		if (pathIsExecutable(SCRIPT_BIN_CANDIDATES[i])) {
 			return SCRIPT_BIN_CANDIDATES[i];
-		} catch (err) {
-			// try next candidate
 		}
 	}
 
@@ -121,9 +270,21 @@ function spawnPipedShell (env, cwd) {
 // with `usingPty: false` if it errored or stayed silent (and has been
 // killed) so the caller can fall back to the next option.
 function spawnWithHangDetection (bin, args, spawnOpts, onSettled) {
-	var proc = child_process.spawn(bin, args, spawnOpts);
+	var proc;
 	var settled = false;
 	var pending = [];
+
+	try {
+		proc = child_process.spawn(bin, args, spawnOpts);
+	} catch (err) {
+		onSettled(null, false, []);
+		return;
+	}
+
+	if (!proc || !proc.stdout) {
+		onSettled(null, false, []);
+		return;
+	}
 
 	function bufferChunk (chunk) {
 		pending.push(chunk);
@@ -156,7 +317,11 @@ function spawnWithHangDetection (bin, args, spawnOpts, onSettled) {
 		if (pending.length) {
 			onSettled(proc, true, pending);
 		} else {
-			proc.kill('SIGKILL');
+			try {
+				proc.kill('SIGKILL');
+			} catch (errKill) {
+				// ignore
+			}
 			onSettled(null, false, []);
 		}
 	}, HANG_DETECT_MS);
@@ -170,6 +335,12 @@ function spawnWithHangDetection (bin, args, spawnOpts, onSettled) {
 // the normal output path. `resizeStream` is the writable side of ptybridge's
 // fd-3 resize channel, or null when not using ptybridge.
 function spawnInteractiveShell (env, cwd, cols, rows, onReady) {
+	// The prisoner jail blocks /dev/ptmx — skip PTY attempts until elevated.
+	if (!serviceIsRoot()) {
+		onReady(spawnPipedShell(env, cwd), false, [], null);
+		return;
+	}
+
 	var bridgeBin = findPtyBridgeBinary();
 
 	function tryScriptThenPiped () {
@@ -201,13 +372,24 @@ function spawnInteractiveShell (env, cwd, cols, rows, onReady) {
 		return;
 	}
 
+	// Prefer 4-fd spawn for resize channel when Node supports it; otherwise
+	// run ptybridge without the resize pipe (still a real PTY).
+	var spawnOpts;
+
+	if (supportsExtraStdio()) {
+		spawnOpts = {env: env, cwd: cwd, stdio: ['pipe', 'pipe', 'pipe', 'pipe']};
+	} else {
+		spawnOpts = {env: env, cwd: cwd};
+	}
+
 	spawnWithHangDetection(
 		bridgeBin,
 		[String(cols), String(rows), '--', '/bin/sh', '-i'],
-		{env: env, cwd: cwd, stdio: ['pipe', 'pipe', 'pipe', 'pipe']},
+		spawnOpts,
 		function (proc, usingPty, pending) {
 			if (usingPty) {
-				onReady(proc, true, pending, proc.stdio[3]);
+				var resizeStream = (proc.stdio && proc.stdio[3]) || null;
+				onReady(proc, true, pending, resizeStream);
 			} else {
 				tryScriptThenPiped();
 			}
@@ -216,7 +398,12 @@ function spawnInteractiveShell (env, cwd, cols, rows, onReady) {
 }
 
 function resolveCwd (requestedCwd) {
-	var fallback = process.env.HOME || '/tmp';
+	var fallback = process.env.HOME || (serviceIsRoot() ? '/home/root' : '/tmp');
+
+	if (serviceIsRoot() && fallback &&
+		(fallback.indexOf('prisoner') !== -1 || fallback === '/media/developer')) {
+		fallback = '/home/root';
+	}
 
 	if (!requestedCwd) {
 		return fallback;
@@ -238,6 +425,7 @@ service.register('open', function (message) {
 	var cols = payload.cols || 80;
 	var rows = payload.rows || 24;
 	var sessionId = makeSessionId();
+	var identity = serviceIdentity();
 	var cwd = resolveCwd(payload.cwd);
 
 	var env = {};
@@ -250,6 +438,21 @@ service.register('open', function (message) {
 	env.TERM = 'xterm-256color';
 	env.COLUMNS = String(cols);
 	env.LINES = String(rows);
+
+	// When elevated, give the interactive shell a real root home instead of
+	// whatever jailed HOME the service process may have inherited.
+	if (identity.isRoot) {
+		if (!env.HOME || env.HOME.indexOf('prisoner') !== -1 ||
+			env.HOME === '/media/developer' || env.HOME.indexOf('/home/developer') === 0) {
+			env.HOME = '/home/root';
+		}
+		env.USER = 'root';
+		env.LOGNAME = 'root';
+		cwd = resolveCwd(payload.cwd || env.HOME);
+	}
+
+	// Re-assert boot hook each open while root (cheap, idempotent).
+	ensureBootElevateHook();
 
 	spawnInteractiveShell(env, cwd, cols, rows, function (shell, usingPty, pendingStdout, resizeStream) {
 		startSession(shell, usingPty, pendingStdout, resizeStream);
@@ -268,7 +471,10 @@ service.register('open', function (message) {
 		returnValue: true,
 		sessionId: sessionId,
 		usingPty: usingPty,
-		subscribed: true
+		subscribed: true,
+		isRoot: identity.isRoot,
+		uid: identity.uid,
+		euid: identity.euid
 	});
 
 	function sendOutput (type, chunk) {
@@ -282,7 +488,7 @@ service.register('open', function (message) {
 			returnValue: true,
 			sessionId: sessionId,
 			type: type,
-			data: Buffer.from(text).toString('base64')
+			data: bufferFrom(text).toString('base64')
 		});
 	}
 
@@ -392,7 +598,7 @@ service.register('write', function (message) {
 		return;
 	}
 
-	session.shell.stdin.write(Buffer.from(payload.data, 'base64'));
+	session.shell.stdin.write(bufferFrom(payload.data, 'base64'));
 	message.respond({returnValue: true});
 });
 
@@ -498,6 +704,22 @@ service.register('registerUiSession', function (message) {
 	}
 
 	message.respond({returnValue: false, errorText: 'Unknown sessionId'});
+});
+
+// Lightweight identity probe (no shell). Clients use this after auto-elevate
+// to confirm the service is running as root before opening a session.
+service.register('status', function (message) {
+	var identity = serviceIdentity();
+
+	message.respond({
+		returnValue: true,
+		isRoot: identity.isRoot,
+		uid: identity.uid,
+		euid: identity.euid,
+		nodeVersion: process.version || null,
+		arch: process.arch || null,
+		pid: process.pid
+	});
 });
 
 service.register('listSessions', function (message) {

@@ -4,7 +4,38 @@
 	"services": [
 		{
 			"name": "com.github.gprot42.webosterminal.service",
+			"description": "Interactive shell service for webOS Terminal",
 			"commands": [
+				{
+					"name": "open",
+					"description": "Open a subscribed interactive shell session",
+					"public": true
+				},
+				{
+					"name": "write",
+					"description": "Write base64-encoded input to a shell session",
+					"public": true
+				},
+				{
+					"name": "resize",
+					"description": "Resize the PTY or shell dimensions",
+					"public": true
+				},
+				{
+					"name": "getCwd",
+					"description": "Best-effort current working directory for a session",
+					"public": true
+				},
+				{
+					"name": "close",
+					"description": "Close a shell session",
+					"public": true
+				},
+				{
+					"name": "status",
+					"description": "Report whether the shell service is running as root",
+					"public": true
+				},
 				{
 					"name": "registerUiSession",
 					"description": "Mark which shell session is displayed in the UI",

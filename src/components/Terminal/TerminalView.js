@@ -509,7 +509,7 @@ class TerminalView extends Component {
 		this.term?.textarea?.focus();
 	};
 
-	handleTerminalRegionActivate = (event) => {
+	handleTerminalRegionActivate = () => {
 		// While the system VKB is up, its ENG (language) list and umlaut/accent
 		// popups render in the app area above the keyboard. Swallowing the pointer
 		// event here blocks those clicks (webOS shows the red "blocked" pointer and
@@ -518,8 +518,8 @@ class TerminalView extends Component {
 			return;
 		}
 
-		event?.preventDefault?.();
-		event?.stopPropagation?.();
+		// Do not preventDefault/stopPropagation: that freezes or desyncs the Magic
+		// Remote pointer on webOS and blocks xterm selection / wheel scroll.
 		this.activateTerminalInput(true);
 	};
 

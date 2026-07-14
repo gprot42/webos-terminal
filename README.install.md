@@ -12,6 +12,16 @@ You will need:
 
 > **Note:** This app is aimed at rooted TVs. On a non-rooted TV, shell access is very limited and the terminal may not work as expected.
 
+### webOS version notes
+
+| webOS | What you get |
+|---|---|
+| **4.x and newer** | Full app (React / xterm) |
+| **3.x** | Experimental full-app boot (Chromium 38) |
+| **1.x–2.x** | **Cut-down legacy shell** only — vanilla UI, single session, basic ANSI. Same IPK; the app auto-selects this path on WebKit. Not feature-parity with modern TVs. |
+
+If a webOS 2 TV previously showed a **blank screen**, reinstall a build that includes the dual-boot loader (`legacy-webos2.js`). You should see a yellow **Legacy** badge and an explanatory banner.
+
 ---
 
 ## Install from a computer
@@ -113,21 +123,37 @@ If the store listing is not yet visible on your TV, refresh the app catalog in H
 ## First launch
 
 1. Open **webOS Terminal**.
-2. You should see a terminal prompt. By default this is `$` as the `prisoner` user (see **[Running as root](#running-as-root)** below for a `#` root prompt).
+2. You should see a terminal prompt. By default this is a **real shell as `prisoner` (non-root)** — `$` prompt, enough for normal Linux commands. See **[Running as root](#running-as-root)** only if you need `#` / PTY.
 3. Type a simple command to confirm it works, such as:
 
 ```bash
+whoami
 uname -a
 ls /
 ```
+
+`whoami` should print `prisoner` (or `root` if you already elevated).
 
 4. Use your remote to focus the terminal. The on-screen keyboard appears when you need to type.
 
 ---
 
+## Non-root vs root
+
+| Mode | Status line | `whoami` | What you get |
+|---|---|---|---|
+| **Default (non-root)** | `mode=native · prisoner` | `prisoner` | Real Linux commands in the homebrew jail |
+| **Elevated (root)** | `mode=native · root` (+ optional PTY) | `root` | Full filesystem, `/dev/ptmx`, job control, TUIs |
+
+**You do not need root** to use the terminal for ordinary commands (`ls`, `cat`, pipelines, etc.). Elevate only when you need root privileges or a real PTY (`vim`, `htop`, …).
+
+There is **no mock mode**. If the service cannot start you get an error, not a fake shell.
+
 ## Running as root
 
-By default the terminal runs as the `prisoner` user inside the homebrew jail (`$` prompt). To run it as **root** (`#` prompt), elevate the shell service from SSH on the same network.
+Optional. By default the terminal runs as the `prisoner` user inside the homebrew jail (`$` prompt). To run as **root** (`#` prompt), elevate the shell service from SSH:
+
+### Elevate the service (SSH)
 
 ### Why run as root?
 
@@ -192,8 +218,13 @@ You should see `root` and `uid=0(root)`.
 To verify the elevation patch on disk:
 
 ```bash
+# webOS 3+ (luna-service2)
 grep '^Exec=' /var/luna-service2-dev/services.d/com.github.gprot42.webosterminal.service.service 2>/dev/null \
   || grep '^Exec=' /var/luna-service2/services.d/com.github.gprot42.webosterminal.service.service
+
+# webOS 1–2 (legacy ls2-dev paths used by elevate-service)
+grep '^Exec=' /var/palm/ls2-dev/services/pub/com.github.gprot42.webosterminal.service.service 2>/dev/null \
+  || grep '^Exec=' /var/palm/ls2-dev/services/prv/com.github.gprot42.webosterminal.service.service
 ```
 
 `Exec=` should point to Homebrew Channel’s `run-js-service`, not `/usr/bin/run-js-service`.
@@ -235,9 +266,30 @@ Homebrew Channel runs scripts in `/var/lib/webosbrew/init.d` on each boot.
 - Make sure Homebrew Channel’s root services are running (open Homebrew Channel once after boot).
 - Try reinstalling the app.
 
+### Status shows `mode=error · service unavailable`
+
+The client could not open a real shell (native service or Homebrew spawn). There is no offline fake shell.
+
+Checklist:
+
+1. **Fully close** webOS Terminal, open **Homebrew Channel once**, reopen Terminal.
+2. From SSH, probe the service:
+   ```bash
+   luna-send -n 1 -f luna://com.github.gprot42.webosterminal.service/listSessions '{"password":"webos"}'
+   # or:
+   luna-send-pub -n 1 -f luna://com.github.gprot42.webosterminal.service/listSessions '{"password":"webos"}'
+   ```
+   Expect `"returnValue": true`. If unknown/timeout: reinstall IPK + `ls-control scan-services`.
+3. Confirm service files:
+   ```bash
+   ls -la /media/developer/apps/usr/palm/services/com.github.gprot42.webosterminal.service/
+   cat /var/palm/ls2-dev/services/pub/com.github.gprot42.webosterminal.service.service
+   ```
+
 ### Commands fail with “permission denied”
 
-- The app may be running as `prisoner` without root privileges. See **[Running as root](#running-as-root)** above.
+- Default is `prisoner` — some paths are blocked by the jail. Elevate for root if you need them: **[Running as root](#running-as-root)**.
+- Confirm the status line is **`mode=native`** (real shell), not `error`.
 - If you already ran `elevate-service` but still see `prisoner`, reload services and kill the stale instance:
   ```bash
   /usr/sbin/ls-control scan-services

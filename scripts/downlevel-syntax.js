@@ -7,21 +7,27 @@
 // @enact scope). Third-party deps such as @xterm/xterm and web-vitals ship
 // native ES2017+ syntax (optional chaining, nullish coalescing, logical
 // assignment, arrow functions, template literals, classes, spread/rest,
-// exponentiation, async/await, etc.) that predates Chrome 80/68. Older /
-// entry-level webOS TVs (e.g. UP7550PTC on webOS 6.5.3, or webOS 4.x sets on
-// Chromium 53) either fail to parse the bundle at all (black window) or get
-// rejected by Homebrew Channel's ipk-verify compatibility check, which flags
-// any ES2017+ syntax when webosRelease is >=4.
+// exponentiation, async/await, unicode property escapes, etc.) that older
+// webOS TVs cannot parse.
 //
-// This script downlevels that syntax to the project's browserslist target
-// (chrome >= 53) in the built bundle after `enact pack`, so the app also
-// runs on those older engines and passes ipk-verify's compatibility check.
+// Targets:
+//   - webOS 3.x  → Chromium 38  (experimental tier)
+//   - webOS 4.x  → Chromium 53  (first-class floor historically)
+//   - Homebrew Channel ipk-verify also flags ES2017+ for webosRelease >= 4
+//
+// We downlevel the entire bundle to Chrome 38 so the same IPK can attempt
+// webOS 3 while remaining valid on webOS 4+ (older syntax runs fine on newer
+// Chromium). Runtime APIs missing on Chrome 38 are handled by
+// src/compat/legacy/webos3/polyfills.js — not here.
 
 const fs = require('fs');
 const path = require('path');
 const babel = require('@babel/core');
 
 const target = path.resolve(__dirname, '../dist/main.js');
+
+// Keep in sync with package.json browserslist floor and WEBOS3_CHROME_MAJOR.
+const CHROME_TARGET = '38';
 
 if (!fs.existsSync(target)) {
 	console.error(`downlevel-syntax: ${target} not found, skipping`);
@@ -37,9 +43,10 @@ const result = babel.transformFileSync(target, {
 		[
 			require.resolve('@babel/preset-env'),
 			{
-				targets: { chrome: '53' },
+				targets: {chrome: CHROME_TARGET},
 				modules: false,
-				useBuiltIns: false
+				useBuiltIns: false,
+				bugfixes: true
 			}
 		]
 	]
@@ -49,4 +56,6 @@ const regeneratorRuntimePath = require.resolve('regenerator-runtime/runtime');
 const regeneratorRuntimeSource = fs.readFileSync(regeneratorRuntimePath, 'utf8');
 
 fs.writeFileSync(target, `${regeneratorRuntimeSource}\n${result.code}`);
-console.log('downlevel-syntax: transformed ES2017+ syntax in dist/main.js');
+console.log(
+	`downlevel-syntax: transformed bundle to chrome ${CHROME_TARGET} in dist/main.js`
+);

@@ -1,13 +1,14 @@
 {
 	"name": "webos-terminal",
-	"version": "0.0.11",
+	"version": "0.0.12",
 	"description": "Native terminal emulator for LG webOS TVs",
 	"author": "webOS Homebrew",
 	"main": "src/index.js",
 	"scripts": {
 		"serve": "node scripts/sync-version.js && enact serve",
-		"pack": "node scripts/sync-version.js && enact pack && node scripts/downlevel-syntax.js",
-		"pack-p": "node scripts/sync-version.js && enact pack -p && node scripts/downlevel-syntax.js",
+		"pack": "node scripts/sync-version.js && enact pack && node scripts/downlevel-syntax.js && node scripts/prune-dist.js && npm run pack-legacy && node scripts/inject-legacy-boot.js",
+		"pack-p": "node scripts/sync-version.js && enact pack -p && node scripts/downlevel-syntax.js && node scripts/prune-dist.js && npm run pack-legacy && node scripts/inject-legacy-boot.js",
+		"pack-legacy": "node scripts/pack-legacy-webos2.js",
 		"watch": "node scripts/sync-version.js && enact pack --watch",
 		"clean": "enact clean",
 		"lint": "enact lint .",
@@ -15,7 +16,8 @@
 		"test": "enact test",
 		"test-watch": "enact test --watch",
 		"build": "npm run pack-p && npm run build-service",
-		"build-service": "mkdir -p dist/services/bin && cp services/shell_service.js services/services.json services/package.json dist/services/ && cp services/bin/ptybridge-* dist/services/bin/ 2>/dev/null || true"
+		"build-service": "mkdir -p dist/services/bin && cp services/shell_service.js services/services.json services/package.json dist/services/ && cp services/bin/ptybridge-* dist/services/bin/ 2>/dev/null || true",
+		"prune-dist": "node scripts/prune-dist.js"
 	},
 	"license": "MIT",
 	"private": true,
@@ -28,7 +30,7 @@
 		"title": "webOS Terminal"
 	},
 	"browserslist": [
-		"chrome >= 53 and chrome < 80"
+		"chrome >= 38"
 	],
 	"dependencies": {
 		"@enact/core": "^5.5.1",

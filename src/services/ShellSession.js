@@ -91,12 +91,13 @@ class ShellSession {
 		this.sessionId = null;
 		this.request = null;
 		this.closed = false;
-		this.mode = 'mock';
+		this.mode = 'connecting';
 		// True when the native service attached a real PTY (ptybridge/script).
 		// Input is then forwarded byte-for-byte; shell readline/TUIs own editing.
 		this.usingPty = false;
+		this.isRoot = false;
+		this.uid = null;
 		this.inputBuffer = '';
-		this.mockHistory = [];
 
 		// Client-side command history for piped native / homebrew modes only.
 		// Those lack a real tty, so the shell can't do readline-style recall
@@ -106,9 +107,14 @@ class ShellSession {
 		this.historyDraft = '';
 
 		if (isWebOS()) {
+			// Open immediately as the service user (usually prisoner / non-root).
+			// That is enough for real Linux commands. Root is optional via elevate.
+			this._notifyInputModeChange();
 			this._openNativeSession();
 		} else {
-			this._openMockSession();
+			this._openErrorSession(
+				'Not running on webOS — PalmServiceBridge unavailable. Deploy the IPK to a rooted TV.'
+			);
 		}
 	}
 
@@ -122,7 +128,9 @@ class ShellSession {
 		this.onInputModeChange?.({
 			mode: this.mode,
 			usingPty: this.usingPty,
-			raw: this.usesRawInput()
+			raw: this.usesRawInput(),
+			isRoot: this.isRoot,
+			uid: this.uid
 		});
 	}
 
@@ -138,6 +146,8 @@ class ShellSession {
 					this.sessionId = response.sessionId;
 					this.mode = 'native';
 					this.usingPty = Boolean(response.usingPty);
+					this.isRoot = Boolean(response.isRoot);
+					this.uid = response.uid != null ? response.uid : null;
 
 					if (this.usingPty) {
 						// Shell/TTY owns echo, history, tab-complete, and raw apps.
@@ -146,6 +156,19 @@ class ShellSession {
 
 					this.registerUiSession(this.automationPassword);
 					this._notifyInputModeChange();
+
+					if (this.isRoot) {
+						this.onData?.(
+							`\x1b[32m[shell: root (uid=0)${
+								this.usingPty ? ', PTY' : ', piped'
+							}]\x1b[0m\r\n`
+						);
+					} else {
+						this.onData?.(
+							`\x1b[36m[shell: non-root (uid=${String(this.uid)}) — ` +
+							'real Linux commands OK; elevate service for root/#]\x1b[0m\r\n'
+						);
+					}
 				}
 
 				if (response.type === 'stdout' || response.type === 'stderr') {
@@ -204,19 +227,22 @@ class ShellSession {
 			onFailure: (error) => {
 				const message = error?.errorText || nativeError?.errorText || 'Shell service unavailable';
 				this.onError?.(message);
-				this._openMockSession(message);
+				this._openErrorSession(message);
 			}
 		});
 	}
 
-	_openMockSession (reason) {
-		this.mode = 'mock';
+	/** Hard failure — no fake offline command simulation. */
+	_openErrorSession (reason) {
+		this.mode = 'error';
 		this.usingPty = false;
 		this._notifyInputModeChange();
 		this.onData(
-			'\x1b[1;32mwebOS Terminal\x1b[0m (browser preview)\r\n' +
+			'\x1b[1;31m[shell unavailable]\x1b[0m\r\n' +
 			(reason ? `\x1b[33m${reason}\x1b[0m\r\n` : '') +
-			'Type commands and press Enter. Use "help" for available commands.\r\n\r\n$ '
+			'\r\nDeploy the IPK to a rooted webOS TV with Homebrew Channel.\r\n' +
+			'Default shell is non-root (prisoner) — enough for normal Linux commands.\r\n' +
+			'Optional root: elevate the package service (see install docs).\r\n'
 		);
 	}
 
@@ -365,8 +391,8 @@ class ShellSession {
 			return;
 		}
 
-		if (this.mode === 'mock') {
-			this._handleMockInput(data);
+		// No input until a real shell is ready; never simulate commands.
+		if (this.mode === 'connecting' || this.mode === 'error') {
 			return;
 		}
 
@@ -426,59 +452,6 @@ class ShellSession {
 				this.onData(`\r\n\x1b[31m${error?.errorText || 'Command failed'}\x1b[0m\r\n$ `);
 			}
 		});
-	}
-
-	_handleMockInput (data) {
-		for (const char of data) {
-			if (char === '\r') {
-				this.onData('\r\n');
-				this._executeMockCommand(this.inputBuffer);
-				this.inputBuffer = '';
-				this.onData('$ ');
-			} else if (char === '\u007F' || char === '\b') {
-				if (this.inputBuffer.length > 0) {
-					this.inputBuffer = this.inputBuffer.slice(0, -1);
-					this.onData('\b \b');
-				}
-			} else if (char >= ' ') {
-				this.inputBuffer += char;
-				this.onData(char);
-			}
-		}
-	}
-
-	_executeMockCommand (line) {
-		const command = line.trim();
-		if (!command) return;
-
-		this.mockHistory.push(command);
-
-		switch (command) {
-			case 'help':
-				this.onData(
-					'Available commands: help, clear, echo, history, uname, pwd\r\n' +
-					'Deploy to a rooted webOS TV for a real shell.\r\n'
-				);
-				break;
-			case 'clear':
-				this.onData('\x1b[2J\x1b[H');
-				break;
-			case 'history':
-				this.mockHistory.forEach((entry, index) => {
-					this.onData(`${index + 1}  ${entry}\r\n`);
-				});
-				break;
-			default:
-				if (command.startsWith('echo ')) {
-					this.onData(command.slice(5) + '\r\n');
-				} else if (command === 'uname') {
-					this.onData('webOS\r\n');
-				} else if (command === 'pwd') {
-					this.onData('/home/developer\r\n');
-				} else {
-					this.onData(`\x1b[33m${command}: command simulated in browser preview\x1b[0m\r\n`);
-				}
-		}
 	}
 
 	// Best-effort: ask the service what directory the shell is in after each

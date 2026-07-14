@@ -236,6 +236,36 @@ launch_app_ssh() {
 		|| die "SSH launch failed for ${APP_ID}. Output: $output"
 }
 
+elevate_service_on_tv() {
+	local elev svc hook
+	elev="/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service"
+	svc="com.github.gprot42.webosterminal.service"
+	hook="/var/lib/webosbrew/init.d/50-webos-terminal-elevate"
+
+	section "Elevating shell service (root)"
+	# Patch Luna so the JS service runs via Homebrew Channel's unjailed
+	# run-js-service (uid 0). Required for real PTY + root shell on all webOS.
+	if ssh_tv "test -x '${elev}'"; then
+		ssh_tv "'${elev}' '${svc}'" || printf "  %s\n" "$(c_ylw "elevate-service returned non-zero (continuing)")"
+		ssh_tv "/usr/sbin/ls-control scan-services >/dev/null 2>&1; pkill -f '${svc}' >/dev/null 2>&1 || true"
+		# Sticky boot hook (same as README auto-elevate section)
+		ssh_tv "mkdir -p /var/lib/webosbrew/init.d && cat > '${hook}' << 'EOF'
+#!/bin/sh
+ELEV=\"/media/developer/apps/usr/palm/services/org.webosbrew.hbchannel.service/elevate-service\"
+SVC=\"com.github.gprot42.webosterminal.service\"
+if [ -x \"\$ELEV\" ]; then
+  \"\$ELEV\" \"\$SVC\" >/dev/null 2>&1 || true
+fi
+/usr/sbin/ls-control scan-services >/dev/null 2>&1 || true
+pkill -f \"\$SVC\" >/dev/null 2>&1 || true
+EOF
+chmod +x '${hook}'" || true
+		printf "  %s\n" "$(c_grn "Service elevated + boot hook installed")"
+	else
+		printf "  %s\n" "$(c_ylw "Homebrew elevate-service not found — app will try Luna elevate on launch")"
+	fi
+}
+
 launch_app() {
 	local launch_js attempt max_attempts delay
 	launch_js="$(ares_js ares-launch)"
@@ -281,10 +311,12 @@ main() {
 	[[ "$SETUP_DEVICE" == "1" ]] && setup_ares_device
 	build_and_package
 	install_ipk
+	elevate_service_on_tv
 	[[ "$LAUNCH" == "1" ]] && launch_app
 
 	section "Done"
 	printf "  %s\n" "$(c_grn "webOS Terminal is on your TV")"
+	printf "  %s\n" "Default shell is non-root (prisoner). Service was elevated for root if Homebrew elevate-service was available."
 }
 
 main "$@"
